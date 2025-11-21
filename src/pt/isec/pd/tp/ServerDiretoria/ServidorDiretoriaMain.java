@@ -3,6 +3,7 @@ package pt.isec.pd.tp.ServerDiretoria;
 import pt.isec.pd.tp.Utils.Configs;
 import pt.isec.pd.tp.Utils.MessageCodes;
 
+import java.io.InputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.Socket;
@@ -23,52 +24,52 @@ public class ServidorDiretoriaMain {
         this.udpPort = udpPort;
     }
 
+    private void TrataTeclado() {
+        System.out.println("Thread de teclado iniciada. Prima ENTER para listar servidores ativos.");
+        Scanner sc = new Scanner(System.in);
+        try {
+            while (true) {
+                switch(sc.nextLine().toLowerCase()) {
+                    case "exit":
+                        System.out.println("A sair...");
+                        for (Iterator<ServerInfo> iter = activeServers.iterator(); iter.hasNext();) {
+                            try{
+                                DatagramSocket socket1 = new DatagramSocket();
+                                MessageCodes aviso = MessageCodes.CLOSE_CONNECTION;
+                                byte[] buffer = aviso.getBytes();
+                                DatagramPacket packet = new DatagramPacket(buffer, buffer.length, iter.next().getIp(), Configs.MULTICAST_PORT);
+                                socket1.send(packet);
+                                socket1.close();
+                            }
+                            catch(Exception _){}
+                            ServerInfo server = iter.next();
+                            System.out.println("A notificar servidor " + server.getIp() + " sobre encerramento.");
+                        }
+                        System.exit(0);
+                        break;
+                    case "server":
+                        System.out.println("Servidores ativos:");
+                        synchronized (activeServers) {
+                            for (ServerInfo server : activeServers) {
+                                System.out.println(" - " + server.getIp() + " (Clientes TCP: " + server.getTcpPortClientes() + ", BD TCP: " + server.getTcpPortDb() + ")");
+                            }
+                        }
+                        break;
+                    default:
+                        System.out.println("Comando desconhecido. Prima ENTER para listar servidores ativos ou 'exit' para sair.");
+                        break;
+                }
+
+            }
+        } catch (Exception e) {
+            System.out.println("Erro ao listar servidores ativos ou fechar servers em segurança: " + e.getMessage());
+        }
+    }
+
     public void start() {
         try {
-            GeraTeclado = new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    System.out.println("Thread de teclado iniciada. Prima ENTER para listar servidores ativos.");
-                    try {
-                        while (true) {
-                            String msg = Arrays.toString(System.in.readAllBytes());
-                            switch(msg) {
-                                case "exit":
-                                    System.out.println("A sair...");
-                                    for (Iterator<ServerInfo> iter = activeServers.iterator(); iter.hasNext();) {
-                                        try{
-                                            DatagramSocket socket1 = new DatagramSocket();
-                                            MessageCodes aviso = MessageCodes.CLOSE_CONNECTION;
-                                            byte[] buffer = aviso.getBytes();
-                                            DatagramPacket packet = new DatagramPacket(buffer, buffer.length, iter.next().getIp(), Configs.MULTICAST_PORT);
-                                            socket1.send(packet);
-                                            socket1.close();
-                                            }
-                                            catch(Exception _){}
-                                            ServerInfo server = iter.next();
-                                            System.out.println("A notificar servidor " + server.getIp() + " sobre encerramento.");
-                                    }
-                                    System.exit(0);
-                                    break;
-                                    case "server":
-                                    System.out.println("Servidores ativos:");
-                                    synchronized (activeServers) {
-                                        for (ServerInfo server : activeServers) {
-                                            System.out.println(" - " + server.getIp() + " (Clientes TCP: " + server.getTcpPortClientes() + ", BD TCP: " + server.getTcpPortDb() + ")");
-                                        }
-                                    }
-                                    break;
-                                    default:
-                                    System.out.println("Comando desconhecido. Prima ENTER para listar servidores ativos ou 'exit' para sair.");
-                                    break;
-                            }
-
-                        }
-                    } catch (Exception e) {
-                        System.out.println("Erro ao listar servidores ativos ou fechar servers em segurança: " + e.getMessage());
-                    }
-                }
-            });
+            GeraTeclado = new Thread( this::TrataTeclado );
+            GeraTeclado.start();
 
             socket = new DatagramSocket(udpPort);
             System.out.println("Serviço de Diretoria iniciado no porto UDP " + udpPort);
@@ -205,6 +206,13 @@ public class ServidorDiretoriaMain {
     }
 
     public static void main(String[] args) {
+        if(args.length < 1){
+            System.out.println("Uso: java ServidorDiretoriaMain");
+            System.exit(1);
+        }
 
+        int udpPort = Integer.parseInt(args[0]);
+        ServidorDiretoriaMain diretoria = new ServidorDiretoriaMain(udpPort);
+        diretoria.start();
     }
 }
