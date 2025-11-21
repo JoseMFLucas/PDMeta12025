@@ -1,10 +1,13 @@
+package pt.isec.pd.tp.ServerDiretoria;
+
+import java.net.DatagramPacket;
 import java.net.InetAddress;
 
 public class ServerInfo {
-    private InetAddress ip;
-    private int tcpPortClientes;
-    private int tcpPortDb;
-    private long registrationTime;
+    private final InetAddress ip;
+    private final int tcpPortClientes;
+    private final int tcpPortDb;
+    private final long registrationTime;
     private long lastHeartbeatTime;
 
     public ServerInfo(InetAddress ip, int tcpPortClientes, int tcpPortDb) {
@@ -31,11 +34,15 @@ public class ServerInfo {
 
     @Override
     public boolean equals(Object obj) {
-        if(this.getIp().equals(((ServerInfo)obj).getIp())) {
+        if(this.getIp().equals(((DatagramPacket)obj).getAddress())) {
             return true;
         } else {
-            return this.getPort().equals(((ServerInfo)obj).getPort());
+            return this.getPort().equals(((DatagramPacket)obj).getPort());
         }
+    }
+
+    public void updateLastHeartbeatTime() {
+        this.lastHeartbeatTime = System.currentTimeMillis();
     }
 }
 
