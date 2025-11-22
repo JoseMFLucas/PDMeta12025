@@ -115,7 +115,9 @@ public class ServidorDiretoriaMain {
                 activeServers.add(new ServerInfo(packet.getAddress(), packet.getPort(),  Integer.parseInt(request.split(";")[2])));
 
                 //    Formato: OK;<ip_principal>;<porto_bd_principal>
-                responseStr = "OK;127.0.0.1;12345";
+                activeServers.sort(Comparator.comparingLong(ServerInfo::getRegistrationTime));
+                ServerInfo principal = activeServers.getFirst();
+                responseStr = "OK;"+ principal.getIp().getHostAddress() + ";" + principal.getTcpPortDb();
                 try(DatagramSocket socket = new DatagramSocket()){
                     byte[] buffer = responseStr.getBytes();
                     DatagramPacket responsePacket = new DatagramPacket(buffer, buffer.length, packet.getAddress(), packet.getPort());
@@ -131,7 +133,7 @@ public class ServidorDiretoriaMain {
                 // Encontrar o servidor na lista (pelo IP e portos?) Se existir, atualizar o seu 'lastHeartbeatTime'
 
                 for (ServerInfo server : activeServers) {
-                    if (server.equals(packet)) { // usa o equals implementado em ServerInfo que compara IP e portos com o packet
+                    if (server.equals(packet)) { // usa o equals implementado em ServerInfo que compara IP e porto com o packet
                         server.updateLastHeartbeatTime();
                         try {
                             responseStr = "OK;" + activeServers.getFirst().getIp().getHostAddress() + ";" + activeServers.getFirst().getTcpPortDb();
