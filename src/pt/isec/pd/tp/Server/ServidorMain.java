@@ -15,6 +15,7 @@ import java.util.concurrent.ScheduledExecutorService;
 
 
 public class ServidorMain {
+
     private final String diretoriaIp;
     private final int diretoriaPort;
     private final String multicastIp;
@@ -97,9 +98,11 @@ public class ServidorMain {
             while (running){
 
                 String msg = is.readLine();
-                System.out.println(msg);
 
-                if (msg.equals(MessageCodes.CLOSE_CONNECTION.toString())) {
+                if(msg != null)
+                    System.out.println(msg);
+
+                if (msg == null || msg.equals(MessageCodes.CLOSE_CONNECTION.toString())) {
                     System.out.println("Servidor em shutdown recebido da diretoria.");
                     running = false;
                 }
@@ -109,8 +112,11 @@ public class ServidorMain {
             System.err.println("Erro na comunicação com a diretoria: " + e.getMessage());
         }
         finally {
+            if(tcpListener != null)
+                tcpListener.close();
+
             tcpThread.interrupt();
-            heartbeat.shutdown();
+            heartbeat.shutdownNow();
             setPrincipal(false);
             running = false;
             System.out.println("Servidor principal mudou. A encerrar ligações de clientes.");
@@ -139,8 +145,13 @@ public class ServidorMain {
                 return 0;
             }
         } else if( response.contains(MessageCodes.CLOSE_CONNECTION.toString())) {
-            tcpThread.interrupt();
-            heartbeat.close();
+            if (tcpListener != null) {
+                tcpListener.close();
+            }
+            if(tcpThread != null && tcpThread.isAlive())
+                tcpThread.interrupt();
+            if(heartbeat != null && !heartbeat.isShutdown())
+                heartbeat.shutdownNow();
             System.out.println("Servidor principal mudou. A encerrar ligações de clientes.");
             return -1;
         } else {

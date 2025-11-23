@@ -42,7 +42,7 @@ public class ServidorTCPListener implements Runnable {
                 new Thread(handler).start();
             }
         } catch (Exception e) {
-            System.err.println("Erro no ServidorTCPListener: " + e.getMessage());
+            System.err.println("A encerrar o ServidorTCPListener: " + e.getMessage());
         }
     }
 }
