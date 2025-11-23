@@ -3,15 +3,17 @@ package pt.isec.pd.tp.ServerDiretoria;
 import pt.isec.pd.tp.Utils.Configs;
 import pt.isec.pd.tp.Utils.MessageCodes;
 
+import java.io.BufferedReader;
 import java.io.InputStream;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.Socket;
+import java.io.InputStreamReader;
+import java.io.PrintStream;
+import java.net.*;
 import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+
+import static java.lang.Thread.sleep;
 
 public class ServidorDiretoriaMain {
 
@@ -22,6 +24,8 @@ public class ServidorDiretoriaMain {
     private Thread GeraTeclado;
     private Boolean closing = false;
     private Thread processaPacotes;
+    private ServerSocket servidorSocket;
+    private boolean tcpOpen = false;
 
     public ServidorDiretoriaMain(int udpPort) {
         this.udpPort = udpPort;
@@ -35,21 +39,6 @@ public class ServidorDiretoriaMain {
                 switch(sc.nextLine().toLowerCase()) {
                     case "exit":
                         System.out.println("A sair...");
-                        for (Iterator<ServerInfo> iter = activeServers.iterator(); iter.hasNext();) {
-                            try{
-                                DatagramSocket socket1 = new DatagramSocket();
-                                MessageCodes aviso = MessageCodes.CLOSE_CONNECTION;
-                                byte[] buffer = aviso.getBytes();
-                                DatagramPacket packet = new DatagramPacket(buffer, buffer.length, iter.next().getIp(), Configs.MULTICAST_PORT);
-                                socket1.send(packet);
-                                socket1.close();
-                            }
-                            catch(Exception e){
-                                System.out.println("Erro ao notificar servidor sobre encerramento: " + e.getMessage());
-                            }
-                            ServerInfo server = iter.next();
-                            System.out.println("A notificar servidor " + server.getIp() + " sobre encerramento.");
-                        }
                         try (DatagramSocket socket = new DatagramSocket()) {
                             byte[] buffer = MessageCodes.CLOSE_CONNECTION.getBytes();
 
@@ -95,12 +84,16 @@ public class ServidorDiretoriaMain {
             scheduler.scheduleAtFixedRate(this::checkServerTimeouts,
                     Configs.SERVER_TIMEOUT_MS, Configs.SERVER_TIMEOUT_MS / 2, TimeUnit.MILLISECONDS);
 
+            servidorSocket = new ServerSocket();
+            servidorSocket.bind(new InetSocketAddress("0.0.0.0", 8081));
+
             while (!closing) {
                 byte[] buffer = new byte[1024];
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                 socket.receive(packet);
 
-                // Processar o pacote numa nova thread para não bloquear o loop
+                if(closing)
+                    break;
                 processaPacotes =  new Thread(() -> {
                     processPacket(packet);
                 });
@@ -134,6 +127,7 @@ public class ServidorDiretoriaMain {
                 activeServers.add(new ServerInfo(packet.getAddress(), Integer.parseInt(request.split(";")[1]),  Integer.parseInt(request.split(";")[2])));
 
                 activeServers.sort(Comparator.comparingLong(ServerInfo::getRegistrationTime));
+
                 ServerInfo principal = activeServers.getFirst();
                 responseStr = "OK;"+ principal.getIp().getHostAddress() + ";" + principal.getTcpPortDb();
                 try(DatagramSocket socket = new DatagramSocket()){
@@ -153,8 +147,23 @@ public class ServidorDiretoriaMain {
 
                         server.updateLastHeartbeatTime();
                         try {
-                            responseStr = "HEARTBEAT;" + activeServers.getFirst().getIp().getHostAddress() + ";" + activeServers.getFirst().getTcpPortClientes();
 
+                            if(server.equals(activeServers.getFirst())) {
+                                responseStr = "HEARTBEAT;PRINCIPAL";
+
+                                if(tcpOpen) {
+
+                                    try {
+                                        new Thread(this::TcpToServerPrincipal).start();
+                                        tcpOpen = true;
+                                    } catch (Exception e) {
+                                        System.out.println("Erro ao abrir porto TCP para comunicar com servidor principal: " + e.getMessage());
+                                    }
+                                }
+                            }
+                            else {
+                                responseStr = "HEARTBEAT;" + activeServers.getFirst().getIp().getHostAddress() + ";" + activeServers.getFirst().getTcpPortClientes();
+                            }
                             try(DatagramSocket socket = new DatagramSocket()){
 
                                 byte[] buffer = responseStr.getBytes();
@@ -171,7 +180,7 @@ public class ServidorDiretoriaMain {
                     }
                 }
 
-            } else if (request.startsWith("GET_SERVER")) {
+           /* } else if (request.startsWith("GET_SERVER")) {
                 // Verificar se a lista 'activeServers' não está vazia Obter o primeiro da lista (servidor principal)
                 activeServers.sort(Comparator.comparingLong(ServerInfo::getRegistrationTime));
                 if (!activeServers.isEmpty())
@@ -187,8 +196,7 @@ public class ServidorDiretoriaMain {
                 }
                 catch (Exception e) {
                     System.out.println("Erro ao enviar servidor principal: " + e.getMessage());
-                }
-
+                }*/
             } else if (request.startsWith("UNREGISTER")) {
                 // Encontrar e remover o servidor da lista
                 if(activeServers.removeIf(server -> server.equals(packet)))
@@ -212,6 +220,41 @@ public class ServidorDiretoriaMain {
 
         } catch (Exception e) {
             System.out.println("Erro ao enviar servidor: " + e.getMessage());
+        }
+    }
+
+    private void TcpToServerPrincipal() {
+
+        try {
+
+            Socket s;
+            PrintStream out;
+            BufferedReader in;
+
+            if (servidorSocket != null) {
+                s = servidorSocket.accept();
+
+                out = new PrintStream(s.getOutputStream());
+                in = new BufferedReader(new InputStreamReader(s.getInputStream()));
+            }
+            else
+                return;
+
+            while (!closing) {
+
+            sleep(5000);
+
+
+
+            }
+            out.println(MessageCodes.CLOSE_CONNECTION);
+
+        } catch (Exception e) {
+            System.out.println("Erro na comunicação TCP com o servidor principal: " + e.getMessage());
+        }
+        finally {
+            tcpOpen = false;
+            socket.close();
         }
     }
 

@@ -8,9 +8,8 @@ import pt.isec.pd.tp.Utils.Configs;
 import pt.isec.pd.tp.Utils.Mensagem;
 import pt.isec.pd.tp.Utils.MessageCodes;
 
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
+import java.io.*;
+import java.net.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -20,6 +19,8 @@ public class ServidorMain {
     private final int diretoriaPort;
     private final String multicastIp;
     private ServidorTCPListener tcpListener;
+
+    private Socket socket;
 
     private Thread tcpThread;
 
@@ -84,23 +85,60 @@ public class ServidorMain {
         }
     }
 
+    private void ComunicadorDiretoriaTCP() {
+
+        try{
+
+            socket = new Socket();
+            socket.connect(new InetSocketAddress(diretoriaIp , diretoriaPort+1));
+            BufferedReader is = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            PrintWriter os = new PrintWriter(socket.getOutputStream(), true);
+
+            while (running){
+
+                String msg = is.readLine();
+                System.out.println(msg);
+
+                if (msg.equals(MessageCodes.CLOSE_CONNECTION.toString())) {
+                    System.out.println("Servidor em shutdown recebido da diretoria.");
+                    running = false;
+                    tcpThread.interrupt();
+                    heartbeat.shutdown();
+                    System.out.println("Servidor principal mudou. A encerrar ligações de clientes.");
+                    break;
+                }
+            }
+            socket.close();
+        } catch (Exception e) {
+            System.err.println("Erro na comunicação com a diretoria: " + e.getMessage());
+        }
+        finally {
+
+            setPrincipal(false);
+            running = false;
+        }
+
+
+    }
+
     public int processarRespostaDiretoria(DatagramPacket udpPacket) {
 
         String response = new String(udpPacket.getData(), 0, udpPacket.getLength());
-        System.out.println("Servidor escutando resposta diretoria: " + response);
 
         if (response.startsWith("HEARTBEAT")) {
-            if(!isPrincipal()) {
-                String ip = response.split(";")[1];
-                int porto = Integer.parseInt(response.split(";")[2]);
-                if (ip.equals(udpPacket.getAddress().getHostAddress()) && porto == getPortoTCPClientes()) {
-                    setPrincipal(true);
-                    System.out.println("Servidor é agora o PRINCIPAL.");
-                    return 1;
-                } else {
-                    setPrincipal(false);
-                    return 0;
+            if(response.contains("PRINCIPAL")) {
+                if(!isPrincipal){
+                    new Thread(this::ComunicadorDiretoriaTCP).start();
+                    System.out.println("Servidor agora é o principal.");
                 }
+                setPrincipal(true);
+
+                return 1;
+            }
+            else
+            {
+                setPrincipal(false);
+                return 0;
             }
         } else if( response.contains(MessageCodes.CLOSE_CONNECTION.toString())) {
             tcpThread.interrupt();

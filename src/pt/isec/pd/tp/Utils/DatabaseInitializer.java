@@ -1,3 +1,5 @@
+package pt.isec.pd.tp.Utils;
+
 import java.sql.*;
 
 public class DatabaseInitializer {
@@ -24,6 +26,8 @@ public class DatabaseInitializer {
             try{
                 conn = DriverManager.getConnection(DB_URL);
 
+            } catch (SQLException ex) {
+                System.out.println(ex.getMessage());
             }
         }
         return conn;

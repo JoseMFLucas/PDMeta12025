@@ -10,7 +10,7 @@ public class ServerInfo {
     private final int tcpPortDb;
     private final long registrationTime;
     private long lastHeartbeatTime;
-
+    private int port;
     public ServerInfo(InetAddress ip, int tcpPortClientes, int tcpPortDb) {
         this.ip = ip;
         this.tcpPortClientes = tcpPortClientes;
@@ -21,7 +21,9 @@ public class ServerInfo {
 
     public InetAddress getIp() { return ip; }
 
-    public Integer getPort() { return tcpPortClientes; }
+    public void setPort(int port) { this.port = port; }
+
+    public Integer getPort() { return port; }
 
     public Integer getTcpPortClientes() { return tcpPortClientes; }
 

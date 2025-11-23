@@ -20,6 +20,14 @@ public class ServidorTCPListener implements Runnable {
         return serverSocket.getLocalPort();
     }
 
+    public void close() {
+        try {
+            serverSocket.close();
+        } catch (Exception e) {
+            System.err.println("Erro ao fechar o ServidorTCPListener: " + e.getMessage());
+        }
+    }
+
     @Override
     public void run() {
         try {
