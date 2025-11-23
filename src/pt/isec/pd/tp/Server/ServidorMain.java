@@ -5,10 +5,14 @@ import pt.isec.pd.tp.Server.comunicacao.MulticastListener;
 import pt.isec.pd.tp.Server.comunicacao.ServidorTCPListener;
 import pt.isec.pd.tp.Server.logica.ServidorLogica;
 import pt.isec.pd.tp.Utils.Configs;
+import pt.isec.pd.tp.Utils.Mensagem;
+import pt.isec.pd.tp.Utils.MessageCodes;
 
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
 
 public class ServidorMain {
@@ -17,40 +21,24 @@ public class ServidorMain {
     private final String multicastIp;
     private ServidorTCPListener tcpListener;
 
+    private Thread tcpThread;
+
     private boolean isPrincipal = false;
     private final ServidorLogica logica = new ServidorLogica(this);
 
+    private boolean running = true;
+
     private int portoTCPClientes;
 
-    public int processarRespostaDiretoria(String response) {
-
-        if (response.startsWith("OK;")) {
-            String role = response.split(";")[1];
-            int porto = Integer.parseInt(response.split(";")[2]);
-            if (tcpListener.checkMainServer(role, porto)) {
-                setPrincipal(true);
-                System.out.println("Servidor é agora o PRINCIPAL.");
-                return 1;
-            } else {
-                setPrincipal(false);
-                System.out.println("Servidor é agora o BACKUP.");
-                return 0;
-            }
-        }
-        return 0;
-    }
-
-    public ServidorMain(String diretoriaIp, int diretoriaPort, String dbPath, String multicastIp) {
-        this.diretoriaIp = diretoriaIp;
-        this.diretoriaPort = diretoriaPort;
-        this.multicastIp = multicastIp;
-    }
+    ScheduledExecutorService heartbeat;
 
     public void start() {
         try {
 
             tcpListener = new ServidorTCPListener(logica, 0);
-            new Thread(tcpListener).start();
+            tcpThread =  new Thread(tcpListener);
+            tcpThread.start();
+
             this.portoTCPClientes = tcpListener.getLocalPort();
 
             System.out.println("Servidor escutando clientes em TCP:" + portoTCPClientes);
@@ -83,12 +71,11 @@ public class ServidorMain {
                 System.exit(1);
             }
 
-            // Iniciar serviços de background
-            HeartbeatManager heartbeatManager = new HeartbeatManager(this);
-            heartbeatManager.run();
+            heartbeat = Executors.newSingleThreadScheduledExecutor();
+            heartbeat.scheduleAtFixedRate( new HeartbeatManager(this), Configs.HEARTBEAT_INTERVAL_MS, Configs.HEARTBEAT_INTERVAL_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
 
-            MulticastListener multicastListener = new MulticastListener(logica, multicastIp);
-            multicastListener.run();
+            //MulticastListener multicastListener = new MulticastListener(logica, multicastIp);
+            //multicastListener.run();
 
             System.out.println("Servidor iniciado e operacional.");
 
@@ -97,11 +84,47 @@ public class ServidorMain {
         }
     }
 
+    public int processarRespostaDiretoria(DatagramPacket udpPacket) {
+
+        String response = new String(udpPacket.getData(), 0, udpPacket.getLength());
+        System.out.println("Servidor escutando resposta diretoria: " + response);
+
+        if (response.startsWith("HEARTBEAT")) {
+            if(!isPrincipal()) {
+                String ip = response.split(";")[1];
+                int porto = Integer.parseInt(response.split(";")[2]);
+                if (ip.equals(udpPacket.getAddress().getHostAddress()) && porto == getPortoTCPClientes()) {
+                    setPrincipal(true);
+                    System.out.println("Servidor é agora o PRINCIPAL.");
+                    return 1;
+                } else {
+                    setPrincipal(false);
+                    return 0;
+                }
+            }
+        } else if( response.contains(MessageCodes.CLOSE_CONNECTION.toString())) {
+            tcpThread.interrupt();
+            heartbeat.close();
+            System.out.println("Servidor principal mudou. A encerrar ligações de clientes.");
+            return -1;
+        } else {
+            System.err.println("Resposta desconhecida do Serviço de Diretoria: " + response);
+        }
+        return 0;
+    }
+
+    public ServidorMain(String diretoriaIp, int diretoriaPort, String dbPath, String multicastIp) {
+        this.diretoriaIp = diretoriaIp;
+        this.diretoriaPort = diretoriaPort;
+        this.multicastIp = multicastIp;
+    }
+
     public boolean isPrincipal() { return isPrincipal; }
     public void setPrincipal(boolean principal) { isPrincipal = principal; }
     public int getPortoTCPClientes() { return portoTCPClientes; }
     public String getDiretoriaIp() { return diretoriaIp; }
     public int getDiretoriaPort() { return diretoriaPort; }
+    public void stop() { this.running = false; }
 
     public static void main(String[] args) {
         if (args.length != 4) {

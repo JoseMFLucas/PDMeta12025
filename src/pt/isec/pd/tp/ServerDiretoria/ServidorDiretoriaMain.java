@@ -6,6 +6,7 @@ import pt.isec.pd.tp.Utils.MessageCodes;
 import java.io.InputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.net.Socket;
 import java.util.*;
 import java.util.concurrent.Executors;
@@ -19,6 +20,8 @@ public class ServidorDiretoriaMain {
     private DatagramSocket socket;
     private ScheduledExecutorService scheduler;
     private Thread GeraTeclado;
+    private Boolean closing = false;
+    private Thread processaPacotes;
 
     public ServidorDiretoriaMain(int udpPort) {
         this.udpPort = udpPort;
@@ -28,7 +31,7 @@ public class ServidorDiretoriaMain {
         System.out.println("Thread de teclado iniciada. Prima ENTER para listar servidores ativos.");
         Scanner sc = new Scanner(System.in);
         try {
-            while (true) {
+            while (!closing) {
                 switch(sc.nextLine().toLowerCase()) {
                     case "exit":
                         System.out.println("A sair...");
@@ -41,11 +44,22 @@ public class ServidorDiretoriaMain {
                                 socket1.send(packet);
                                 socket1.close();
                             }
-                            catch(Exception _){}
+                            catch(Exception e){
+                                System.out.println("Erro ao notificar servidor sobre encerramento: " + e.getMessage());
+                            }
                             ServerInfo server = iter.next();
                             System.out.println("A notificar servidor " + server.getIp() + " sobre encerramento.");
                         }
-                        System.exit(0);
+                        try (DatagramSocket socket = new DatagramSocket()) {
+                            byte[] buffer = MessageCodes.CLOSE_CONNECTION.getBytes();
+
+                            DatagramPacket packet = new DatagramPacket(buffer, buffer.length, InetAddress.getByName("localhost"), udpPort);
+                            socket.send(packet);
+                        } catch (Exception e) {
+                            System.out.println("Erro ao notificar servidores sobre encerramento: " + e.getMessage());
+
+                        }
+                        closing = true;
                         break;
                     case "server":
                         System.out.println("Servidores ativos:");
@@ -64,6 +78,8 @@ public class ServidorDiretoriaMain {
         } catch (Exception e) {
             System.out.println("Erro ao listar servidores ativos ou fechar servers em segurança: " + e.getMessage());
         }
+
+        System.out.println("Thread de teclado terminada.");
     }
 
     public void start() {
@@ -79,42 +95,44 @@ public class ServidorDiretoriaMain {
             scheduler.scheduleAtFixedRate(this::checkServerTimeouts,
                     Configs.SERVER_TIMEOUT_MS, Configs.SERVER_TIMEOUT_MS / 2, TimeUnit.MILLISECONDS);
 
-            while (true) {
+            while (!closing) {
                 byte[] buffer = new byte[1024];
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                 socket.receive(packet);
 
                 // Processar o pacote numa nova thread para não bloquear o loop
-                new Thread(() -> processPacket(packet)).start();
+                processaPacotes =  new Thread(() -> {
+                    processPacket(packet);
+                });
+                processaPacotes.start();
             }
         } catch (Exception e) {
             System.out.println("Erro ao listar servidores ativos: " + e.getMessage());
         } finally {
             if (socket != null && !socket.isClosed()) {
                 socket.close();
+                scheduler.shutdownNow();
             }
+            System.out.println("A fechar o serviço de diretoria...");
         }
+        System.out.println("Thread de principal terminada.");
     }
 
     private void processPacket(DatagramPacket packet) {
         try {
             String request = new String(packet.getData(), 0, packet.getLength());
+
             StringTokenizer tokenizer = new StringTokenizer(request, ";");
-            String responseStr = "ERROR;Pedido inválido";
+            String responseStr = "ERROR;Comando desconhecido";
 
-            if(tokenizer.countTokens() < 3) {
-
-
-                byte[] responseData = responseStr.getBytes();
-                DatagramPacket responsePacket = new DatagramPacket(responseData, responseData.length, packet.getAddress(), packet.getPort());
-                socket.send(responsePacket);
-            }
             if (request.startsWith("REGISTER")) {
+                if(tokenizer.countTokens()<3)
+                {
+                    System.out.println("ERROR;Parâmetros insuficientes para registo");
+                    return;
+                }
+                activeServers.add(new ServerInfo(packet.getAddress(), Integer.parseInt(request.split(";")[1]),  Integer.parseInt(request.split(";")[2])));
 
-                // Formato: REGISTER;<porto_tcp_clientes>;<porto_tcp_bd> , Adicionar à lista 'activeServers'
-                activeServers.add(new ServerInfo(packet.getAddress(), packet.getPort(),  Integer.parseInt(request.split(";")[2])));
-
-                //    Formato: OK;<ip_principal>;<porto_bd_principal>
                 activeServers.sort(Comparator.comparingLong(ServerInfo::getRegistrationTime));
                 ServerInfo principal = activeServers.getFirst();
                 responseStr = "OK;"+ principal.getIp().getHostAddress() + ";" + principal.getTcpPortDb();
@@ -127,20 +145,24 @@ public class ServidorDiretoriaMain {
                     System.out.println("Erro ao registrar servidor: " + e.getMessage());
                 }
 
-
-
             } else if (request.startsWith("HEARTBEAT")) {
-                // Encontrar o servidor na lista (pelo IP e portos?) Se existir, atualizar o seu 'lastHeartbeatTime'
 
                 for (ServerInfo server : activeServers) {
-                    if (server.equals(packet)) { // usa o equals implementado em ServerInfo que compara IP e porto com o packet
+
+                    if (server.compareServer(packet)) {
+
                         server.updateLastHeartbeatTime();
                         try {
-                            responseStr = "OK;" + activeServers.getFirst().getIp().getHostAddress() + ";" + activeServers.getFirst().getTcpPortDb();
+                            responseStr = "HEARTBEAT;" + activeServers.getFirst().getIp().getHostAddress() + ";" + activeServers.getFirst().getTcpPortClientes();
+
                             try(DatagramSocket socket = new DatagramSocket()){
+
                                 byte[] buffer = responseStr.getBytes();
                                 DatagramPacket responsePacket = new DatagramPacket(buffer, buffer.length, packet.getAddress(), packet.getPort());
                                 socket.send(responsePacket);
+                            }
+                            catch (Exception e) {
+                                System.out.println("Erro ao enviar heartbeat response: " + e.getMessage());
                             }
                         }
                         catch (Exception e) {

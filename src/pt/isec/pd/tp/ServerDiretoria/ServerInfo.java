@@ -2,6 +2,7 @@ package pt.isec.pd.tp.ServerDiretoria;
 
 import java.net.DatagramPacket;
 import java.net.InetAddress;
+import java.util.Arrays;
 
 public class ServerInfo {
     private final InetAddress ip;
@@ -22,7 +23,7 @@ public class ServerInfo {
 
     public Integer getPort() { return tcpPortClientes; }
 
-    public int getTcpPortClientes() { return tcpPortClientes; }
+    public Integer getTcpPortClientes() { return tcpPortClientes; }
 
     public int getTcpPortDb() { return tcpPortDb; }
 
@@ -32,12 +33,16 @@ public class ServerInfo {
 
     public void setLastHeartbeatTime(long lastHeartbeatTime) { this.lastHeartbeatTime = lastHeartbeatTime; }
 
-    @Override
-    public boolean equals(Object obj) {
-        if(this.getIp().equals(((DatagramPacket)obj).getAddress())) {
+
+    public boolean compareServer(DatagramPacket packet) {
+        String request = new String(packet.getData(), 0, packet.getLength());
+        String[] parts = request.split(";");
+        int port = Integer.parseInt(parts[1]);
+
+        if(this.getIp().equals(packet.getAddress())) {
             return true;
         } else {
-            return this.getPort().equals(((DatagramPacket)obj).getPort());
+            return this.getTcpPortClientes().equals(port);
         }
     }
 

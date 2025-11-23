@@ -54,7 +54,7 @@ public class ServidorLogica {
                 // TODO: Chamar dbManager.getPerguntasDocente(...)
                 // return new Mensagem(Mensagem.Tipo.LISTA_PERGUNTAS, lista);
                 break;
-            // ... outros casos de leitura
+            // ... Outros casos de leitura
         }
 
 

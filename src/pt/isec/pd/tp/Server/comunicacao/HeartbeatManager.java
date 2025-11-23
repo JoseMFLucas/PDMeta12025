@@ -20,37 +20,33 @@ public class HeartbeatManager implements Runnable {
 
     @Override
     public void run() {
+
         try (DatagramSocket udpSocket = new DatagramSocket();
              MulticastSocket multicastSocket = new MulticastSocket()) {
-            
-            udpSocket.setSoTimeout(5000);
 
             InetAddress diretoriaAddr = InetAddress.getByName(servidor.getDiretoriaIp());
             InetAddress multicastAddr = InetAddress.getByName(Configs.MULTICAST_ADDRESS);
 
-            while (running) {
+            String payload = String.format("HEARTBEAT;%d", servidor.getPortoTCPClientes());
 
-                String payload = String.format("HEARTBEAT;%d", servidor.getPortoTCPClientes());
+            byte[] data = payload.getBytes();
 
-                byte[] data = payload.getBytes();
+            // Enviar heartbeat UDP para o Serviço de Diretoria
+            DatagramPacket udpPacket = new DatagramPacket(data, data.length, diretoriaAddr, servidor.getDiretoriaPort());
+            udpSocket.send(udpPacket);
 
-                // Enviar heartbeat UDP para o Serviço de Diretoria
-                DatagramPacket udpPacket = new DatagramPacket(data, data.length, diretoriaAddr, servidor.getDiretoriaPort());
-                udpSocket.send(udpPacket);
+            udpPacket = new DatagramPacket(new byte[1024], 1024);
+            udpSocket.receive(udpPacket);
 
-                udpPacket = new DatagramPacket(data, data.length);
-                udpSocket.receive(udpPacket);
-                String response = new String(udpPacket.getData(), 0, udpPacket.getLength());
+            if(servidor.processarRespostaDiretoria(udpPacket) == 1) {
 
-                if(servidor.processarRespostaDiretoria(response) == 1) {
-
-                    DatagramPacket multicastPacket = new DatagramPacket(data, data.length, multicastAddr, Configs.MULTICAST_PORT);
-                    multicastSocket.send(multicastPacket);
-                }
-
+                DatagramPacket multicastPacket = new DatagramPacket(data, data.length, multicastAddr, Configs.MULTICAST_PORT);
+                multicastSocket.send(multicastPacket);
             }
+
         } catch (Exception e) {
-            System.out.println("Erro: " + e.getMessage());
+            System.out.println("Erro de heartbeat: " + e.getMessage());
+            stop();
         }
     }
 

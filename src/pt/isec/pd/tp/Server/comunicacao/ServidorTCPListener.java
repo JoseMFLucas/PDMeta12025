@@ -16,10 +16,6 @@ public class ServidorTCPListener implements Runnable {
         this.serverSocket = new ServerSocket(port);
     }
 
-    public boolean checkMainServer(String ip, int port) {
-         return serverSocket.getInetAddress().toString().equals(ip) && port == serverSocket.getLocalPort();
-    }
-
     public int getLocalPort() {
         return serverSocket.getLocalPort();
     }
