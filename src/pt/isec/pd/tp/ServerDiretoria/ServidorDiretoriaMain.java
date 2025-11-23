@@ -21,10 +21,10 @@ public class ServidorDiretoriaMain {
     private final int udpPort;
     private DatagramSocket socket;
     private ScheduledExecutorService scheduler;
-    private Thread GeraTeclado;
+    private Thread GeraTeclado, processaPacotes, tcpToServerPrincipal;
     private Boolean closing = false;
-    private Thread processaPacotes;
     private ServerSocket servidorSocket;
+    private Socket socketLigacao;
     private boolean tcpOpen = false;
 
     public ServidorDiretoriaMain(int udpPort) {
@@ -39,6 +39,7 @@ public class ServidorDiretoriaMain {
                 switch(sc.nextLine().toLowerCase()) {
                     case "exit":
                         System.out.println("A sair...");
+                        closing = true;
                         try (DatagramSocket socket = new DatagramSocket()) {
                             byte[] buffer = MessageCodes.CLOSE_CONNECTION.getBytes();
 
@@ -46,9 +47,10 @@ public class ServidorDiretoriaMain {
                             socket.send(packet);
                         } catch (Exception e) {
                             System.out.println("Erro ao notificar servidores sobre encerramento: " + e.getMessage());
-
                         }
-                        closing = true;
+                        if(socketLigacao != null && !socketLigacao.isClosed())
+                            socketLigacao.close();
+
                         break;
                     case "server":
                         System.out.println("Servidores ativos:");
@@ -151,10 +153,11 @@ public class ServidorDiretoriaMain {
                             if(server.equals(activeServers.getFirst())) {
                                 responseStr = "HEARTBEAT;PRINCIPAL";
 
-                                if(tcpOpen) {
+                                if(!tcpOpen) {
 
                                     try {
-                                        new Thread(this::TcpToServerPrincipal).start();
+                                        tcpToServerPrincipal = new Thread(this::TcpToServerPrincipal);
+                                        tcpToServerPrincipal.start();
                                         tcpOpen = true;
                                     } catch (Exception e) {
                                         System.out.println("Erro ao abrir porto TCP para comunicar com servidor principal: " + e.getMessage());
@@ -236,15 +239,15 @@ public class ServidorDiretoriaMain {
 
                 out = new PrintStream(s.getOutputStream());
                 in = new BufferedReader(new InputStreamReader(s.getInputStream()));
+                socketLigacao = s;
             }
             else
                 return;
 
+
             while (!closing) {
 
-            sleep(5000);
-
-
+                out.println(in.readLine());
 
             }
             out.println(MessageCodes.CLOSE_CONNECTION);
@@ -253,6 +256,7 @@ public class ServidorDiretoriaMain {
             System.out.println("Erro na comunicação TCP com o servidor principal: " + e.getMessage());
         }
         finally {
+            System.out.println("Fechando comunicação TCP com o servidor principal.");
             tcpOpen = false;
             socket.close();
         }

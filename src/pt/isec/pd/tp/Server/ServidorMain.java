@@ -102,10 +102,6 @@ public class ServidorMain {
                 if (msg.equals(MessageCodes.CLOSE_CONNECTION.toString())) {
                     System.out.println("Servidor em shutdown recebido da diretoria.");
                     running = false;
-                    tcpThread.interrupt();
-                    heartbeat.shutdown();
-                    System.out.println("Servidor principal mudou. A encerrar ligações de clientes.");
-                    break;
                 }
             }
             socket.close();
@@ -113,9 +109,11 @@ public class ServidorMain {
             System.err.println("Erro na comunicação com a diretoria: " + e.getMessage());
         }
         finally {
-
+            tcpThread.interrupt();
+            heartbeat.shutdown();
             setPrincipal(false);
             running = false;
+            System.out.println("Servidor principal mudou. A encerrar ligações de clientes.");
         }
 
 
