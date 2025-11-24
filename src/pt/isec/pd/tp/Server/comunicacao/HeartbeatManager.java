@@ -12,7 +12,6 @@ import java.net.MulticastSocket;
 
 public class HeartbeatManager implements Runnable {
     private final ServidorMain servidor;
-    private boolean running = true;
 
     public HeartbeatManager(ServidorMain servidor) {
         this.servidor = servidor;
@@ -24,6 +23,7 @@ public class HeartbeatManager implements Runnable {
         try (DatagramSocket udpSocket = new DatagramSocket();
              MulticastSocket multicastSocket = new MulticastSocket()) {
 
+            udpSocket.setSoTimeout(Configs.SERVER_TIMEOUT_MS);
             InetAddress diretoriaAddr = InetAddress.getByName(servidor.getDiretoriaIp());
             InetAddress multicastAddr = InetAddress.getByName(Configs.MULTICAST_ADDRESS);
 
@@ -45,12 +45,8 @@ public class HeartbeatManager implements Runnable {
             }
 
         } catch (Exception e) {
+            servidor.stop();
             System.out.println("Erro de heartbeat: " + e.getMessage());
-            stop();
         }
-    }
-
-    public void stop() {
-        this.running = false;
     }
 }

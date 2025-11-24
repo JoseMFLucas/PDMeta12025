@@ -112,13 +112,7 @@ public class ServidorMain {
             System.err.println("Erro na comunicação com a diretoria: " + e.getMessage());
         }
         finally {
-            if(tcpListener != null)
-                tcpListener.close();
-
-            tcpThread.interrupt();
-            heartbeat.shutdownNow();
-            setPrincipal(false);
-            running = false;
+            stop();
             System.out.println("Servidor principal mudou. A encerrar ligações de clientes.");
         }
 
@@ -171,7 +165,19 @@ public class ServidorMain {
     public int getPortoTCPClientes() { return portoTCPClientes; }
     public String getDiretoriaIp() { return diretoriaIp; }
     public int getDiretoriaPort() { return diretoriaPort; }
-    public void stop() { this.running = false; }
+
+    public void stop() {
+        if (tcpListener != null) {
+            tcpListener.close();
+        }
+        if(tcpThread != null && tcpThread.isAlive())
+            tcpThread.interrupt();
+        if(heartbeat != null && !heartbeat.isShutdown())
+            heartbeat.shutdownNow();
+        setPrincipal(false);
+        running = false;
+    }
+
 
     public static void main(String[] args) {
         if (args.length != 4) {

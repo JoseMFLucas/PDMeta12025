@@ -149,8 +149,8 @@ public class ServidorDiretoriaMain {
 
                         server.updateLastHeartbeatTime();
                         try {
-
-                            if(server.equals(activeServers.getFirst())) {
+                            
+                            if(activeServers.getFirst().compareServer(packet)) {
                                 responseStr = "HEARTBEAT;PRINCIPAL";
 
                                 if(!tcpOpen) {
