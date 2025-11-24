@@ -22,6 +22,10 @@ public class ServidorMain {
     private final String multicastIp;
     private ServidorTCPListener tcpListener;
 
+    private Thread threadComP;
+    private String principalIp;
+    private int principalPort;
+
     private Socket socket;
     private DBManager dbManager;
 
@@ -78,14 +82,47 @@ public class ServidorMain {
             heartbeat = Executors.newSingleThreadScheduledExecutor();
             heartbeat.scheduleAtFixedRate( new HeartbeatManager(this), Configs.HEARTBEAT_INTERVAL_MS, Configs.HEARTBEAT_INTERVAL_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
 
-            //MulticastListener multicastListener = new MulticastListener(logica, multicastIp);
-            //multicastListener.run();
+            MulticastListener multicastListener = new MulticastListener(logica, multicastIp, running);
+            multicastListener.run();
 
             System.out.println("Servidor iniciado e operacional.");
 
         } catch (Exception e) {
             System.out.println("Erro ao iniciar Servidor: " + e.getMessage());
         }
+    }
+
+    private void ComunicadorPrincipalTCP() {
+
+        try{
+
+            socket = new Socket();
+            socket.connect(new InetSocketAddress(principalIp , principalPort));
+            BufferedReader is = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            PrintWriter os = new PrintWriter(socket.getOutputStream(), true);
+
+            while (running){
+
+                String msg = is.readLine();
+
+                if(msg != null)
+                    System.out.println(msg);
+
+                if(!socket.isConnected())
+                    break;
+
+            }
+
+            if(!socket.isConnected())
+                socket.close();
+
+        } catch (Exception e) {
+            System.err.println("Erro na comunicação com o servidor principal: " + e.getMessage());
+        }
+        finally {
+            System.out.println("Servidor principal mudou. A encerrar ligações de clientes.");
+        }
+
     }
 
     private void ComunicadorDiretoriaTCP() {
@@ -118,7 +155,6 @@ public class ServidorMain {
             System.out.println("Servidor principal mudou. A encerrar ligações de clientes.");
         }
 
-
     }
 
     public int processarRespostaDiretoria(DatagramPacket udpPacket) {
@@ -137,8 +173,16 @@ public class ServidorMain {
             }
             else
             {
-                setPrincipal(false);
-                return 0;
+                if(!threadComP.isAlive()){
+                    principalIp = response.split(";")[1];
+                    principalPort = Integer.parseInt(response.split(";")[2]);
+                    threadComP = new Thread(this::ComunicadorPrincipalTCP);
+                    threadComP.start();
+                    System.out.println("Servidor agora é secundário. A comunicar com o principal em " + principalIp + ":" + principalPort);
+                    setPrincipal(false);
+                    return 0;
+                }
+
             }
         } else if( response.contains(MessageCodes.CLOSE_CONNECTION.toString())) {
             if (tcpListener != null) {

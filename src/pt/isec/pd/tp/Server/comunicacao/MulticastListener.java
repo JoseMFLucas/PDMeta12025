@@ -11,10 +11,12 @@ import java.net.NetworkInterface;
 public class MulticastListener implements Runnable {
     private final ServidorLogica logica;
     private final String multicastInterfaceIp; // IP da interface de rede
+    private final boolean running;
 
-    public MulticastListener(ServidorLogica logica, String multicastInterfaceIp) {
+    public MulticastListener(ServidorLogica logica, String multicastInterfaceIp, boolean running) {
         this.logica = logica;
         this.multicastInterfaceIp = multicastInterfaceIp;
+        this.running = running;
     }
 
     @Override
@@ -26,11 +28,12 @@ public class MulticastListener implements Runnable {
             NetworkInterface netIf = NetworkInterface.getByInetAddress(InetAddress.getByName(multicastInterfaceIp));
             socket.setNetworkInterface(netIf);
 
-            socket.joinGroup(group);
+            //socket.joinGroup(group);
 
-            while (true) {
+            while (running) {
                 byte[] buffer = new byte[4096]; // Buffer maior para queries SQL
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+
                 socket.receive(packet);
 
                 while(netIf.getInetAddresses().hasMoreElements()) {
@@ -46,7 +49,7 @@ public class MulticastListener implements Runnable {
                 }
 
                 String payload = new String(packet.getData(), 0, packet.getLength());
-                //serverLogica.processarMensagemMulticast(payload);
+                //logica.processarMensagemMulticast(payload);
                 System.out.println("Recebido multicast: " + payload);
             }
         } catch (Exception e) {

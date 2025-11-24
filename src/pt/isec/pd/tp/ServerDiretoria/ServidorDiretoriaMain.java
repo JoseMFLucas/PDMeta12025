@@ -3,6 +3,7 @@ package pt.isec.pd.tp.ServerDiretoria;
 import pt.isec.pd.tp.Utils.Configs;
 import pt.isec.pd.tp.Utils.MessageCodes;
 
+import javax.xml.crypto.Data;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -113,6 +114,48 @@ public class ServidorDiretoriaMain {
         System.out.println("Thread de principal terminada.");
     }
 
+    private boolean manageTcpConection(DatagramPacket packet, ServerInfo server, String responseStr) {
+
+        if (server.compareServer(packet)) {
+
+            server.updateLastHeartbeatTime();
+            try {
+                activeServers.sort(Comparator.comparingLong(ServerInfo::getRegistrationTime));
+                if(activeServers.getFirst().equals(server)) {
+
+                    if(!tcpOpen) {
+
+                        try {
+                            tcpToServerPrincipal = new Thread(this::TcpToServerPrincipal);
+                            tcpToServerPrincipal.start();
+                            tcpOpen = true;
+                        } catch (Exception e) {
+                            System.out.println("Erro ao abrir porto TCP para comunicar com servidor principal: " + e.getMessage());
+                        }
+                    }
+                    responseStr = "HEARTBEAT;PRINCIPAL";
+                }
+                else {
+                    responseStr = "HEARTBEAT;" + server.getIp().getHostAddress() + ";" + server.getPort();
+                }
+
+                try(DatagramSocket socket = new DatagramSocket()){
+
+                    byte[] buffer = responseStr.getBytes();
+                    DatagramPacket responsePacket = new DatagramPacket(buffer, buffer.length, packet.getAddress(), packet.getPort());
+                    socket.send(responsePacket);
+                }
+                catch (Exception e) {
+                    System.out.println("Erro ao enviar heartbeat response: " + e.getMessage());
+                }
+            }
+            catch (Exception e) {
+                System.out.println("Erro ao enviar heartbeat response: " + e.getMessage());
+            }
+        }
+        return responseStr.equals("HEARTBEAT;PRINCIPAL");
+    }
+
     private void processPacket(DatagramPacket packet) {
         try {
             String request = new String(packet.getData(), 0, packet.getLength());
@@ -145,61 +188,11 @@ public class ServidorDiretoriaMain {
 
                 for (ServerInfo server : activeServers) {
 
-                    if (server.compareServer(packet)) {
-
-                        server.updateLastHeartbeatTime();
-                        try {
-                            
-                            if(activeServers.getFirst().compareServer(packet)) {
-                                responseStr = "HEARTBEAT;PRINCIPAL";
-
-                                if(!tcpOpen) {
-
-                                    try {
-                                        tcpToServerPrincipal = new Thread(this::TcpToServerPrincipal);
-                                        tcpToServerPrincipal.start();
-                                        tcpOpen = true;
-                                    } catch (Exception e) {
-                                        System.out.println("Erro ao abrir porto TCP para comunicar com servidor principal: " + e.getMessage());
-                                    }
-                                }
-                            }
-                            else {
-                                responseStr = "HEARTBEAT;" + activeServers.getFirst().getIp().getHostAddress() + ";" + activeServers.getFirst().getTcpPortClientes();
-                            }
-                            try(DatagramSocket socket = new DatagramSocket()){
-
-                                byte[] buffer = responseStr.getBytes();
-                                DatagramPacket responsePacket = new DatagramPacket(buffer, buffer.length, packet.getAddress(), packet.getPort());
-                                socket.send(responsePacket);
-                            }
-                            catch (Exception e) {
-                                System.out.println("Erro ao enviar heartbeat response: " + e.getMessage());
-                            }
-                        }
-                        catch (Exception e) {
-                            System.out.println("Erro ao enviar heartbeat response: " + e.getMessage());
-                        }
+                    if(manageTcpConection(packet, server, responseStr)) {
+                        break;
                     }
-                }
 
-           /* } else if (request.startsWith("GET_SERVER")) {
-                // Verificar se a lista 'activeServers' não está vazia Obter o primeiro da lista (servidor principal)
-                activeServers.sort(Comparator.comparingLong(ServerInfo::getRegistrationTime));
-                if (!activeServers.isEmpty())
-                    try(DatagramSocket socket = new DatagramSocket()){
-                    DatagramPacket responsePacket;
-
-                    ServerInfo principal = activeServers.getFirst();
-                    // Formato: SERVER;<ip_principal>;<porto_clientes_principal>
-                    responseStr = "SERVER;" + principal.getIp().getHostAddress() + ";" + principal.getTcpPortClientes();
-                    byte[] buffer = responseStr.getBytes();
-                    responsePacket = new DatagramPacket(buffer, buffer.length, packet.getAddress(), packet.getPort());
-                    socket.send(responsePacket);
                 }
-                catch (Exception e) {
-                    System.out.println("Erro ao enviar servidor principal: " + e.getMessage());
-                }*/
             } else if (request.startsWith("UNREGISTER")) {
                 // Encontrar e remover o servidor da lista
                 if(activeServers.removeIf(server -> server.equals(packet)))
@@ -240,6 +233,7 @@ public class ServidorDiretoriaMain {
                 out = new PrintStream(s.getOutputStream());
                 in = new BufferedReader(new InputStreamReader(s.getInputStream()));
                 socketLigacao = s;
+                activeServers.getFirst().setPort(s.getPort());
             }
             else
                 return;

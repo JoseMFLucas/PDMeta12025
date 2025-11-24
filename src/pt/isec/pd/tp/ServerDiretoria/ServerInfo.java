@@ -11,6 +11,7 @@ public class ServerInfo {
     private final long registrationTime;
     private long lastHeartbeatTime;
     private int port;
+
     public ServerInfo(InetAddress ip, int tcpPortClientes, int tcpPortDb) {
         this.ip = ip;
         this.tcpPortClientes = tcpPortClientes;
@@ -19,11 +20,15 @@ public class ServerInfo {
         this.lastHeartbeatTime = System.currentTimeMillis();
     }
 
+    public int getPort() {
+        return port;
+    }
+
+    public void setPort(int port) {
+        this.port = port;
+    }
+
     public InetAddress getIp() { return ip; }
-
-    public void setPort(int port) { this.port = port; }
-
-    public Integer getPort() { return port; }
 
     public Integer getTcpPortClientes() { return tcpPortClientes; }
 
@@ -33,19 +38,13 @@ public class ServerInfo {
 
     public long getLastHeartbeatTime() { return lastHeartbeatTime; }
 
-    public void setLastHeartbeatTime(long lastHeartbeatTime) { this.lastHeartbeatTime = lastHeartbeatTime; }
-
 
     public boolean compareServer(DatagramPacket packet) {
         String request = new String(packet.getData(), 0, packet.getLength());
         String[] parts = request.split(";");
         int port = Integer.parseInt(parts[1]);
 
-        if(this.getIp().equals(packet.getAddress())) {
-            return true;
-        } else {
-            return this.getTcpPortClientes().equals(port);
-        }
+        return this.getIp().equals(packet.getAddress()) && this.getTcpPortClientes() == port;
     }
 
     public void updateLastHeartbeatTime() {
