@@ -3,6 +3,7 @@ package pt.isec.pd.tp.Server;
 import pt.isec.pd.tp.Server.comunicacao.HeartbeatManager;
 import pt.isec.pd.tp.Server.comunicacao.MulticastListener;
 import pt.isec.pd.tp.Server.comunicacao.ServidorTCPListener;
+import pt.isec.pd.tp.Server.dados.DBManager;
 import pt.isec.pd.tp.Server.logica.ServidorLogica;
 import pt.isec.pd.tp.Utils.Configs;
 import pt.isec.pd.tp.Utils.Mensagem;
@@ -22,11 +23,12 @@ public class ServidorMain {
     private ServidorTCPListener tcpListener;
 
     private Socket socket;
+    private DBManager dbManager;
 
     private Thread tcpThread;
 
     private boolean isPrincipal = false;
-    private final ServidorLogica logica = new ServidorLogica(this);
+    private final ServidorLogica logica = new ServidorLogica(this, dbManager);
 
     private boolean running = true;
 
