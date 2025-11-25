@@ -207,6 +207,17 @@ public class ServidorDiretoriaMain {
                         System.out.println("Erro ao enviar unregister response: " + e.getMessage());
                     }
                 }
+            } else if (request.startsWith("REQUEST_SERVER")) {
+                // Pedido do Cliente para obter o Servidor Principal
+
+                if (activeServers.isEmpty()) {
+                    responseStr = "ERROR;Nenhum servidor ativo.";
+                } else {
+                    // Vai buscar o servidor principal e mete a resposta no formato OK;IP_SERVIDOR;PORTO_TCP_CLIENTES
+                    ServerInfo principal = activeServers.getFirst();
+
+                    responseStr = "OK;" + principal.getIp().getHostAddress() + ";" + principal.getTcpPortClientes();
+                }
             }
 
             // Enviar resposta
