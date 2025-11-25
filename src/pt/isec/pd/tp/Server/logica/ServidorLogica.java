@@ -36,7 +36,7 @@ public class ServidorLogica {
         if(msg.getTipo() == Mensagem.Tipo.LOGIN){
             //TODO: Enviar mensagem a pedir o email e password
 
-            if(dbManager.login()){
+            if(dbManager.login((String) msg.getPayload())){
                 return new Mensagem(Mensagem.Tipo.LOGIN_SUCESSO, null);
             }else{
                 return new Mensagem(Mensagem.Tipo.LOGIN_FALHOU, null);
