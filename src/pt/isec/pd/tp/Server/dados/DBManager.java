@@ -1,5 +1,7 @@
 package pt.isec.pd.tp.Server.dados;
 
+import pt.isec.pd.tp.Utils.Client;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,6 +26,8 @@ public class DBManager {
 
     public static Connection connectDB() {
 
+        System.out.println(DB_URL);
+        System.out.println(FULL_DB_PATH.toString());
         boolean dbExists = Files.exists(FULL_DB_PATH);
 
         try{
@@ -139,29 +143,22 @@ public class DBManager {
         }
     }
 
-    public static boolean login(/*String msg*/){
-      /*  String[] dados = msg.split(" ", 2);
-
-        if(dados.length != 2){
-            return false;
+    public static String login(Client client){
+        if(conn == null){
+            connectDB();
         }
-
-        String email = dados[0];
-        String password = dados[1];
+        String email = client.getEmail();
+        String password = client.getPassword();
 
         if (checkLogin(conn, "Docente", email, password)) {
-            userType = "DOCENTE";
+            return "DOCENTE";
         }
 
         else if (checkLogin(conn, "Estudante", email, password)) {
-            userType = "ESTUDANTE";
+            return "ESTUDANTE";
         }
 
-        if (userType == null) {
-            System.out.println("Login falhou. Credenciais inválidas.");
-        } else {
-            System.out.println("Login bem-sucedido como: " + userType);
-        }
+        return null;
     }
 
     public static boolean checkLogin(Connection conn, String userType, String email, String password){
@@ -170,19 +167,19 @@ public class DBManager {
             throw new IllegalArgumentException("Tipo de utilizador inválido.");
         }
 
-        String sql = "SELECT * FROM " + userType + "WHERE email = " + email + " AND password = " + password;
+        String sql = "SELECT * FROM " + userType + " WHERE email = ? AND password = ?";
 
-        try (var stmt = conn.createStatement();
-             var rs = stmt.executeQuery(sql)) {
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, email);
+            pstmt.setString(2, password);
 
-            if(rs.next()){
-                return true;
+            try (ResultSet rs = pstmt.executeQuery()) {
+                return rs.next();
             }
-                return false;
 
         } catch (SQLException e) {
-            System.err.println(e.getMessage());
-        }*/
+            System.err.println("Erro ao verificar login: " + e.getMessage());
+        }
         return false;
     }
 
