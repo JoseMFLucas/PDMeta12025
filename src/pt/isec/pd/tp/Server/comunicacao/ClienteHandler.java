@@ -49,7 +49,7 @@ public class ClienteHandler implements Runnable {
                     if (msg.getTipo() == Mensagem.Tipo.LOGIN || msg.getTipo() == Mensagem.Tipo.REGISTO_DOCENTE
                             || msg.getTipo() == Mensagem.Tipo.REGISTO_ESTUDANTE) {
 
-                        resposta = logica.processarLoginRegisto(msg); // TODO: Implementar em ServidorLogica
+                        resposta = logica.processarLoginRegisto(msg);
 
                         if (resposta.getTipo() == Mensagem.Tipo.LOGIN_SUCESSO
                                 || resposta.getTipo() == Mensagem.Tipo.REGISTO_SUCESSO) {
