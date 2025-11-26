@@ -3,6 +3,7 @@ package pt.isec.pd.tp.Server.logica;
 import pt.isec.pd.tp.Server.ServidorMain;
 import pt.isec.pd.tp.Server.comunicacao.ClienteHandler;
 import pt.isec.pd.tp.Server.dados.DBManager;
+import pt.isec.pd.tp.Utils.Client;
 import pt.isec.pd.tp.Utils.Mensagem;
 import java.util.Collections;
 import java.util.HashSet;
@@ -33,16 +34,16 @@ public class ServidorLogica {
 
     public Mensagem processarLoginRegisto(Mensagem msg) {
 
-        if(msg.getTipo() == Mensagem.Tipo.LOGIN){
-            //TODO: Enviar mensagem a pedir o email e password
+        if(msg.getTipo() == Mensagem.Tipo.LOGIN) {
+            String userType = dbManager.login((Client) msg.getPayload());
 
-            if(dbManager.login((String) msg.getPayload())){
-                return new Mensagem(Mensagem.Tipo.LOGIN_SUCESSO, null);
-            }else{
+            if (userType != null) {
+                return new Mensagem(Mensagem.Tipo.LOGIN_SUCESSO, userType);
+            } else {
                 return new Mensagem(Mensagem.Tipo.LOGIN_FALHOU, null);
             }
-        }
 
+        }
         if(msg.getTipo() == Mensagem.Tipo.REGISTO_ESTUDANTE){
             //TODO: Enviar mensagem a pedir o numero de estudante, email e password
 
