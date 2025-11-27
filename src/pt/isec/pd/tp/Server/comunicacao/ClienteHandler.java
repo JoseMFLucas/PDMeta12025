@@ -51,12 +51,11 @@ public class ClienteHandler implements Runnable {
 
                         resposta = logica.processarLoginRegisto(msg);
 
-                        if (resposta.getTipo() == Mensagem.Tipo.LOGIN_SUCESSO
-                                || resposta.getTipo() == Mensagem.Tipo.REGISTO_SUCESSO) {
+                        if (resposta.getTipo() == Mensagem.Tipo.LOGIN_SUCESSO) {
                             this.autenticado = true;
                             socket.setSoTimeout(0); // Remover timeout após autenticação
-                            // TODO: Associar 'user' ao handler
                         }
+
                         oos.writeObject(resposta);
                     } else {
                         // Não autenticado e a tentar fazer outra coisa
@@ -68,7 +67,6 @@ public class ClienteHandler implements Runnable {
                     // Utilizador autenticado
                     if (msg.getTipo() == Mensagem.Tipo.LOGOUT) {
                         this.autenticado = false;
-                        // TODO: Limpar dados do user
                         oos.writeObject(new Mensagem(Mensagem.Tipo.OPERACAO_SUCESSO, "Logout com sucesso"));
                         socket.setSoTimeout(Configs.AUTH_TIMEOUT_MS); // Repor timeout
                     } else {
