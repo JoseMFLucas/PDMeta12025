@@ -3,7 +3,7 @@ package pt.isec.pd.tp.Server.logica;
 import pt.isec.pd.tp.Server.ServidorMain;
 import pt.isec.pd.tp.Server.comunicacao.ClienteHandler;
 import pt.isec.pd.tp.Server.dados.DBManager;
-import pt.isec.pd.tp.Utils.Client;
+import pt.isec.pd.tp.Client.Client;
 import pt.isec.pd.tp.Utils.Mensagem;
 import java.util.Collections;
 import java.util.HashSet;

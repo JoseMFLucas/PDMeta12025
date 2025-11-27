@@ -3,8 +3,6 @@ package pt.isec.pd.tp.Client;
 import pt.isec.pd.tp.Client.Comunicacao.ClientComunicacao;
 import pt.isec.pd.tp.Client.Vista.ClientVista;
 import pt.isec.pd.tp.Utils.Mensagem;
-import pt.isec.pd.tp.Utils.MessageCodes;
-import pt.isec.pd.tp.Utils.Client;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;

@@ -1,6 +1,6 @@
 package pt.isec.pd.tp.Server.dados;
 
-import pt.isec.pd.tp.Utils.Client;
+import pt.isec.pd.tp.Client.Client;
 
 import java.io.IOException;
 import java.nio.file.Files;
