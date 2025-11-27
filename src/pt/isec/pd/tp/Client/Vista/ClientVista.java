@@ -36,6 +36,14 @@ public class ClientVista {
         System.out.print("Escolha uma opção: ");
     }
 
+    public void menuRegisto() {
+        System.out.println("\n--- REGISTAR ---");
+        System.out.println("1. Docente");
+        System.out.println("2. Estudante");
+        System.out.println("0. Sair");
+        System.out.print("Escolha uma opção: ");
+    }
+
     public void menuDocente() {
         System.out.println("\n--- MENU DOCENTE ---");
         System.out.println("1. Criar pergunta");
