@@ -45,31 +45,53 @@ public class ServidorLogica {
 
         }
         if(msg.getTipo() == Mensagem.Tipo.REGISTO_ESTUDANTE){
-            //TODO: Enviar mensagem a pedir o numero de estudante, email e password
+            System.out.println("Registar Estudante");
+            String[] payload = (String[]) msg.getPayload();
+           if(dbManager.registarEstudante((String[]) msg.getPayload())){
+               notificarClientes(new Mensagem(Mensagem.Tipo.REGISTO_SUCESSO, "Novo Cliente foi registado.")); // Notificar atualização
 
-            if(dbManager.registarEstudante((String) msg.getPayload())){
-                notificarClientes(new Mensagem(Mensagem.Tipo.REGISTO_SUCESSO, null)); // Notificar atualização
+               System.out.println("Registo efetuado com sucesso.");
+
+               // Após o registo, tenta fazer o login automaticamente
+               String email = payload[1];
+               String password = payload[2];
+               String userType = dbManager.login(new Client(email, password, null));
+               System.out.println("Tipo de utilizador:" + userType);
+               if (userType != null) {
+                   return new Mensagem(Mensagem.Tipo.LOGIN_SUCESSO, userType);
+               } else {
+                   return new Mensagem(Mensagem.Tipo.LOGIN_FALHOU, "Login automático falhou após registo.");
+               }
             } else{
+                System.out.println("Registo falhou");
                 return new Mensagem(Mensagem.Tipo.REGISTO_FALHOU, null);
             }
-
-            return new Mensagem(Mensagem.Tipo.REGISTO_SUCESSO, null);
         }
 
         if(msg.getTipo() == Mensagem.Tipo.REGISTO_DOCENTE){
-            //TODO: Enviar mensagem a pedir o numero de docente, email e password
-            //Quando receber -> db.registar(msg);
+            System.out.println("Registar Docente");
+            String[] payload = (String[]) msg.getPayload();
+            if(dbManager.registarDocente((String []) msg.getPayload())){
+                notificarClientes(new Mensagem(Mensagem.Tipo.REGISTO_SUCESSO, "Novo Docente foi registado.")); // Notificar atualização
 
-            if(dbManager.registarDocente((String) msg.getPayload())){
-                notificarClientes(new Mensagem(Mensagem.Tipo.REGISTO_SUCESSO, null)); // Notificar atualização
+                System.out.println("Registo efetuado com sucesso.");
+
+                // Após o registo, tenta fazer o login automaticamente
+                String email = payload[1];
+                String password = payload[2];
+                String userType = dbManager.login(new Client(email, password, null));
+                System.out.println("Tipo de utilizador:" + userType);
+                if (userType != null) {
+                    return new Mensagem(Mensagem.Tipo.LOGIN_SUCESSO, userType);
+                } else {
+                    return new Mensagem(Mensagem.Tipo.LOGIN_FALHOU, "Login automático falhou após registo.");
+                }
             } else{
+                System.out.println("Registo falhou");
                 return new Mensagem(Mensagem.Tipo.REGISTO_FALHOU, null);
             }
-
-            return new Mensagem(Mensagem.Tipo.REGISTO_SUCESSO, null);
         }
-
-        return new Mensagem(Mensagem.Tipo.LOGIN_SUCESSO, null);
+        return new Mensagem(Mensagem.Tipo.EXIT, null);
     }
 
     public Mensagem processarMensagem(Mensagem msg) {
@@ -85,6 +107,7 @@ public class ServidorLogica {
         switch (msg.getTipo()) {
             // Casos de Escrita (alteram BD)
             case CRIAR_PERGUNTA:
+                System.out.println("Criar pergunta");
                 // TODO: 1. Pedir iniciais dados da pergunta - pedir primeiro o enunciado, o número de opções, o período de disponibilidade (data/hora de início e de fim)
                 // 2. Pedir cada uma das opções
                 // 3. Pedir a opção correta
