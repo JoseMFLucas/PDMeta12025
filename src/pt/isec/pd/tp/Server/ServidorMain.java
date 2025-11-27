@@ -27,12 +27,12 @@ public class ServidorMain {
     private int principalPort;
 
     private Socket socket;
-    private DBManager dbManager;
+    private final DBManager dbManager;
 
     private Thread tcpThread;
 
     private boolean isPrincipal = false;
-    private final ServidorLogica logica = new ServidorLogica(this, dbManager);
+    private final ServidorLogica logica;
 
     private boolean running = true;
 
@@ -173,7 +173,7 @@ public class ServidorMain {
             }
             else
             {
-                if(!threadComP.isAlive()){
+                if(threadComP != null && !threadComP.isAlive()){
                     principalIp = response.split(";")[1];
                     principalPort = Integer.parseInt(response.split(";")[2]);
                     threadComP = new Thread(this::ComunicadorPrincipalTCP);
@@ -204,6 +204,8 @@ public class ServidorMain {
         this.diretoriaIp = diretoriaIp;
         this.diretoriaPort = diretoriaPort;
         this.multicastIp = multicastIp;
+        this.dbManager = new DBManager(dbPath);
+        this.logica = new ServidorLogica(this, this.dbManager);
     }
 
     public boolean isPrincipal() { return isPrincipal; }
