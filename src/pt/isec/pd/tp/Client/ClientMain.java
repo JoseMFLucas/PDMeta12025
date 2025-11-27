@@ -3,14 +3,17 @@ package pt.isec.pd.tp.Client;
 import pt.isec.pd.tp.Client.Comunicacao.ClientComunicacao;
 import pt.isec.pd.tp.Client.Vista.ClientVista;
 import pt.isec.pd.tp.Utils.Mensagem;
+import pt.isec.pd.tp.Utils.MessageCodes;
 import pt.isec.pd.tp.Utils.Client;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.util.Arrays;
 
 public class ClientMain {
 
@@ -21,6 +24,12 @@ public class ClientMain {
 
     private ObjectOutputStream out;
     private ObjectInputStream in;
+
+    Client user;
+
+    String email, password, numero, nome, codigo, opcaocorreta, datainicio, datafim;
+
+    String[] info;
 
     public ClientMain(ClientVista vista, Socket principalSocket){
         this.vista = vista;
@@ -38,9 +47,9 @@ public class ClientMain {
 
     // Loop Inicial (Menu Principal)
 
-    public void loopInicial() {
+    public void loopInicial() throws IOException {
 
-        while (!autenticated) {
+        while (!autenticated && !closing) {
 
             vista.menuPrincipal();
             ClientVista.ClientInput input = vista.lerInputGeral();
@@ -49,11 +58,11 @@ public class ClientMain {
             switch (input.inputInt) {
                 case 1: // Login
                     vista.mostrarInfo("Introduza o email e a password para iniciar o login.");
-                    String email = vista.lerStringObrigatoria("Email: ");
-                    String password = vista.lerStringObrigatoria("Password: ");
+                    email = vista.lerStringObrigatoria("Email: ");
+                    password = vista.lerStringObrigatoria("Password: ");
                     vista.mostrarInfo("Iniciar o login com email: " + email + " e password: " + password);
                     try {
-                        Client user = new Client(email, password, null);
+                        user = new Client(email, password, null);
                         Mensagem msg = new Mensagem(Mensagem.Tipo.LOGIN, user);
                         out.writeObject(msg);
                         out.flush();
@@ -67,23 +76,193 @@ public class ClientMain {
                             autenticated = true;
                         } else {
                             vista.mostrarErro("Login falhou. Credenciais inválidas.");
+                            closeResources();
+                            closing = true;
                         }
                     } catch(IOException | ClassNotFoundException e) {
                         vista.mostrarErro("Erro durante o login: " + e.getMessage());
-                        closing = true;
                     }
-                    autenticated = true;
                     break;
                 case 2: // Registar
-                    vista.mostrarInfo("Iniciando Registo. (Lógica a implementar)...");
+                    vista.menuRegisto();
+                    ClientVista.ClientInput inputregistar = vista.lerInputGeral();
+                    switch (inputregistar.inputInt){
+                        case 1:
+                            vista.mostrarInfo("Introduza nome, e-mail, password e o código único para completar o registo.");
+                            nome = vista.lerStringObrigatoria("Nome: ");
+                            email = vista.lerStringObrigatoria("Email: ");
+                            password = vista.lerStringObrigatoria("Password: ");
+                            codigo = vista.lerStringObrigatoria("Código Único: ");
+
+                            info = new String[]{nome, email, password, codigo};
+                            try {
+                                Mensagem msg = new Mensagem(Mensagem.Tipo.REGISTO_DOCENTE, info);
+                                out.writeObject(msg);
+                                out.flush();
+
+                                Mensagem response = (Mensagem) in.readObject();
+                                if (response.getTipo() == Mensagem.Tipo.REGISTO_SUCESSO) {
+                                    vista.mostrarInfo("Registo bem-sucedido!");
+                                    vista.mostrarInfo("Efetue o registo!");
+                                } else if(response.getTipo() == Mensagem.Tipo.REGISTO_FALHOU) {
+                                    vista.mostrarErro("Registo falhou. O número de estudante ou o email já estão registados.");
+                                    closeResources();
+                                    closing = true;
+                                } else {
+                                    vista.mostrarErro("Registo falhou. Introduziu mal os dados.");
+                                    closeResources();
+                                    closing = true;
+                                }
+                            } catch(IOException | ClassNotFoundException e) {
+                                vista.mostrarErro("Erro durante o registo: " + e.getMessage());
+                            }
+                            break;
+                        case 2:
+                            vista.mostrarInfo("Introduza número de estudante, nome, e-mail, password para completar o registo.");
+                            numero = vista.lerStringObrigatoria("Numero: ");
+                            nome = vista.lerStringObrigatoria("Nome: ");
+                            email = vista.lerStringObrigatoria("Email: ");
+                            password = vista.lerStringObrigatoria("Password: ");
+
+                            info = new String[]{numero, nome, email, password};
+
+                            try {
+                                Mensagem msg = new Mensagem(Mensagem.Tipo.REGISTO_ESTUDANTE, info);
+                                out.writeObject(msg);
+                                out.flush();
+
+                                Mensagem response = (Mensagem) in.readObject();
+                                if (response.getTipo() == Mensagem.Tipo.REGISTO_SUCESSO) {
+                                    vista.mostrarInfo("Registo bem-sucedido!");
+
+                                    response = (Mensagem) in.readObject();
+                                    if (response.getTipo() == Mensagem.Tipo.LOGIN_SUCESSO) {
+
+                                        user = new Client(email, password, Client.Tipo.valueOf((String) response.getPayload()));
+
+                                        System.out.println("Tipo de utilizador:" + user.getTipo());
+                                        autenticated = true;
+                                    }
+                                } else if(response.getTipo() == Mensagem.Tipo.REGISTO_FALHOU) {
+                                    vista.mostrarErro("Registo falhou. O número de estudante ou o email já estão registados.");
+                                    closeResources();
+                                    closing = true;
+                                } else {
+                                    vista.mostrarErro("Registo falhou. Introduziu mal os dados.");
+                                    closeResources();
+                                    closing = true;
+                                }
+                            } catch(IOException | ClassNotFoundException e) {
+                                vista.mostrarErro("Erro durante o registo: " + e.getMessage());
+                            }
+                            break;
+                    }
                     break;
                 case 0: // Sair do programa
-                    vista.mostrarInfo("A encerrar Cliente por opção '0'.");
+                    vista.mostrarInfo("A encerrar Cliente.");
+                    Mensagem msg = new Mensagem(Mensagem.Tipo.EXIT, null);
+                    out.writeObject(msg);
+                    out.flush();
+                    closeResources();
                     closing = true;
                     break;
                 default:
-                    vista.mostrarAviso("Opção de menu inválida. Tente 'exit' ou um número válido.");
+                    vista.mostrarAviso("Opção de menu inválida. Tente um número válido.");
                     break;
+            }
+        }
+
+        while (autenticated && !closing) {
+            if(user.getTipo() == Client.Tipo.DOCENTE){
+                vista.menuDocente();
+                ClientVista.ClientInput inputregistar = vista.lerInputGeral();
+                switch (inputregistar.inputInt){
+                    case 1:
+                        vista.mostrarInfo("Introduza o número de opções, as opções, a opção correta e o período de disponibilidade (data/hora de início e de fim)");
+                        numero = vista.lerStringObrigatoria("Numero de opções: ");
+                        String[] opcoes = new String[Integer.parseInt(numero)];
+                        for(int i = 1; i < Integer.parseInt(numero) + 1; i++){
+                            opcoes[i-1] = vista.lerStringObrigatoria("Opção " + i + ": ");
+                        }
+                        opcaocorreta = vista.lerStringObrigatoria("Opção Correta: ");
+                        datainicio = vista.lerStringObrigatoria("Período de disponibilidade (data/hora de início): ");
+                        datafim = vista.lerStringObrigatoria("Período de disponibilidade (data/hora de fim): ");
+
+                        info = new String[]{numero, Arrays.toString(opcoes), opcaocorreta, datainicio, datafim};
+
+                        try {
+                            Mensagem msg = new Mensagem(Mensagem.Tipo.CRIAR_PERGUNTA, info);
+                            out.writeObject(msg);
+                            out.flush();
+
+                            Mensagem response = (Mensagem) in.readObject();
+                            if (response.getTipo() == Mensagem.Tipo.OPERACAO_SUCESSO) {
+                                vista.mostrarInfo("Pergunta adicionada com sucesso! (ID PERGUNTA: " + response.getPayload());
+                            } else {
+                                vista.mostrarErro("Erro a adicionar pergunta.");
+                            }
+                        } catch(IOException | ClassNotFoundException e) {
+                            vista.mostrarErro("Erro durante o envio da pergunta: " + e.getMessage());
+                        }
+                        break;
+                    case 2:
+                        break;
+                    case 3:
+                        break;
+                    case 4:
+                        break;
+                    case 5:
+                        break;
+                    case 0:
+                        vista.mostrarInfo("Logout.");
+                        try {
+                            Mensagem msg = new Mensagem(Mensagem.Tipo.LOGOUT, info);
+                            out.writeObject(msg);
+                            out.flush();
+
+                            Mensagem response = (Mensagem) in.readObject();
+                            if (response.getTipo() == Mensagem.Tipo.OPERACAO_SUCESSO) {
+                                vista.mostrarInfo("O Cliente deu logout com sucesso!");
+                            } else {
+                                vista.mostrarErro("Erro a dar logout.");
+                            }
+                        } catch(IOException | ClassNotFoundException e) {
+                            vista.mostrarErro("Erro durante o envio da mensagem: " + e.getMessage());
+                        }
+                        autenticated = false;
+                        loopInicial();
+                        break;
+                }
+            }else if(user.getTipo() == Client.Tipo.ESTUDANTE){
+                vista.menuEstudante();
+                ClientVista.ClientInput inputregistar = vista.lerInputGeral();
+                switch (inputregistar.inputInt){
+                    case 1:
+                        break;
+                    case 2:
+                        break;
+                    case 0:
+                        vista.mostrarInfo("Logout.");
+                        try {
+                            Mensagem msg = new Mensagem(Mensagem.Tipo.LOGOUT, info);
+                            out.writeObject(msg);
+                            out.flush();
+
+                            Mensagem response = (Mensagem) in.readObject();
+                            if (response.getTipo() == Mensagem.Tipo.OPERACAO_SUCESSO) {
+                                vista.mostrarInfo("O Cliente deu logout com sucesso!");
+                            } else {
+                                vista.mostrarErro("Erro a dar logout.");
+                            }
+                        } catch(IOException | ClassNotFoundException e) {
+                            vista.mostrarErro("Erro durante o envio da mensagem: " + e.getMessage());
+                        }
+                        autenticated = false;
+                        loopInicial();
+                        break;
+                }
+            }else{
+                closeResources();
             }
         }
 
