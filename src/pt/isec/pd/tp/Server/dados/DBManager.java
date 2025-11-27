@@ -15,49 +15,55 @@ import java.util.List;
 public class DBManager {
 
     private static final String DB_FILE_NAME = "pdtp.db";
+    private final String dbPath;
+    private Connection conn;
 
-    private static final Path DB_FOLDER_PATH = Paths.get("db");
+    public DBManager(String dbPath) {
+        this.dbPath = dbPath;
+        this.conn = connectDB();
+    }
 
-    private static final Path FULL_DB_PATH = DB_FOLDER_PATH.resolve(DB_FILE_NAME).normalize();
+    private Connection connectDB() {
+        Path providedPath = Paths.get(this.dbPath).normalize();
+        Path dbFilePath = providedPath;
 
-    private static final String DB_URL = "jdbc:sqlite:" + FULL_DB_PATH.toAbsolutePath();
+        if (Files.isDirectory(providedPath)) {
+            dbFilePath = providedPath.resolve(DB_FILE_NAME);
+        }
 
-    private static Connection conn;
+        Path dbFolder = dbFilePath.getParent();
+        String dbUrl = "jdbc:sqlite:" + dbFilePath.toAbsolutePath();
 
-    public static Connection connectDB() {
+        Connection connection = null;
+        boolean dbExists = Files.exists(dbFilePath);
 
-        System.out.println(DB_URL);
-        System.out.println(FULL_DB_PATH.toString());
-        boolean dbExists = Files.exists(FULL_DB_PATH);
-
-        try{
-            if(!Files.exists(DB_FOLDER_PATH)){
-                Files.createDirectories(DB_FOLDER_PATH);
-                System.out.println("Pasta db criada");
+        try {
+            if (dbFolder != null && !Files.exists(dbFolder)) {
+                Files.createDirectories(dbFolder);
+                System.out.println("Pasta " + dbFolder + " criada");
             }
 
-            conn = DriverManager.getConnection(DB_URL);
+            connection = DriverManager.getConnection(dbUrl);
 
-            if(!dbExists){
+            if (!dbExists) {
                 System.out.println("Db nova. A criar tabelas...");
-                createTables(conn);
+                createTables(connection);
             }
         } catch (IOException e) {
             System.err.println("Erro IO: " + e.getMessage());
+            return null;
         } catch (SQLException e) {
             System.err.println("Erro SQL: " + e.getMessage());
-            if (conn != null) {
+            if (connection != null) {
                 try {
-                    conn.close();
+                    connection.close();
                 } catch (SQLException ex) {
                     System.err.println("Erro ao fechar a ligação á base de dados: " + ex.getMessage());
                 }
-                conn = null;
             }
+            return null;
         }
-
-
-        return conn;
+        return connection;
     }
 
 
@@ -123,7 +129,7 @@ public class DBManager {
                 ;
     }
 
-    private static void createTables(Connection conn) throws SQLException {
+    private static void createTables(Connection conn){
         try (Statement stmt = conn.createStatement()) {
 
             stmt.execute("PRAGMA foreign_keys = ON;");
@@ -143,25 +149,26 @@ public class DBManager {
         }
     }
 
-    public static String login(Client client){
+    public String login(Client client){
         if(conn == null){
-            connectDB();
+            System.err.println("Login falhou: Conexão com a base de dados não estabelecida.");
+            return null;
         }
         String email = client.getEmail();
         String password = client.getPassword();
 
-        if (checkLogin(conn, "Docente", email, password)) {
+        if (checkLogin("Docente", email, password)) {
             return "DOCENTE";
         }
 
-        else if (checkLogin(conn, "Estudante", email, password)) {
+        else if (checkLogin("Estudante", email, password)) {
             return "ESTUDANTE";
         }
 
         return null;
     }
 
-    public static boolean checkLogin(Connection conn, String userType, String email, String password){
+    public boolean checkLogin(String userType, String email, String password){
 
         if (!userType.equals("Docente") && !userType.equals("Estudante")) {
             throw new IllegalArgumentException("Tipo de utilizador inválido.");
@@ -183,96 +190,109 @@ public class DBManager {
         return false;
     }
 
-    public static boolean registarEstudante(String msg){
-        String[] dados = msg.split(" ", 4);
-
-        if(dados.length != 4){
+    public boolean registarEstudante(String[] msg) {
+        if (conn == null || msg.length != 4) {
             return false;
         }
-
-        String numero_estudante = dados[0];
-        String nome = dados[1];
-        String email = dados[2];
-        String password = dados[3];
 
         String sql = "INSERT INTO Estudante (numero_estudante, nome, email, password) VALUES (?, ?, ?, ?)";
+        boolean originalAutoCommit = false;
 
-        /*try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try {
+            originalAutoCommit = conn.getAutoCommit();
+            conn.setAutoCommit(false); // Inicia a transação
 
-            pstmt.setString(1, numero_estudante);
-            pstmt.setString(2, nome);
-            pstmt.setString(3, email);
-            pstmt.setString(4, password);
+            try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                pstmt.setString(1, msg[0]);
+                pstmt.setString(2, msg[1]);
+                pstmt.setString(3, msg[2]);
+                pstmt.setString(4, msg[3]);
 
-            int linhasAfetadas = pstmt.executeUpdate();
+                int linhasAfetadas = pstmt.executeUpdate();
 
-            if(linhasAfetadas > 0){
-                return true;
+                if (linhasAfetadas > 0) {
+                    conn.commit(); // Confirma a transação
+                    return true;
+                } else {
+                    conn.rollback(); // Desfaz se nada foi inserido
+                    return false;
+                }
             }
-            return false;
-
         } catch (SQLException e) {
             System.err.println("Erro ao adicionar Estudante: " + e.getMessage());
+            try {
+                conn.rollback(); // Desfaz em caso de erro
+            } catch (SQLException ex) {
+                System.err.println("Erro ao realizar rollback: " + ex.getMessage());
+            }
             return false;
-        }*/
-        return false;
+        } finally {
+            try {
+                conn.setAutoCommit(originalAutoCommit); // Restaura o modo original
+            } catch (SQLException e) {
+                System.err.println("Erro ao restaurar auto-commit: " + e.getMessage());
+            }
+        }
     }
 
-    public static boolean registarDocente(String msg){
-        String[] dados = msg.split(" ", 4);
 
-        if(dados.length != 4){
+    public boolean registarDocente(String[] msg) {
+        if (conn == null || msg.length != 4) {
             return false;
         }
 
-        String nome = dados[0];
-        String email = dados[1];
-        String password = dados[2];
-        String codigo_unico = dados[3];
-
         String sql = "INSERT INTO Docente (nome, email, password) VALUES (?, ?, ?)";
-
         String sql_codigounico = "SELECT codigoregisto FROM Configuracao";
-/*
-        try (var stmt = conn.createStatement();
-             var rs = stmt.executeQuery(sql_codigounico)) {
+        boolean originalAutoCommit = false;
 
-            if(rs.next()){
-                if(rs.getString("codigoregisto").equals(codigo_unico))
+        try {
+            originalAutoCommit = conn.getAutoCommit();
+            conn.setAutoCommit(false); // Inicia a transação
+
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery(sql_codigounico)) {
+
+                if (rs.next() && rs.getString("codigoregisto").equals(msg[3])) {
                     try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
-                        pstmt.setString(1, nome);
-                        pstmt.setString(2, email);
-                        pstmt.setString(3, password);
+                        pstmt.setString(1, msg[0]);
+                        pstmt.setString(2, msg[1]);
+                        pstmt.setString(3, msg[2]);
 
                         int linhasAfetadas = pstmt.executeUpdate();
 
-                        if(linhasAfetadas > 0){
+                        if (linhasAfetadas > 0) {
+                            conn.commit(); // Confirma a transação
                             return true;
                         }
-                        return false;
-
-                    } catch (SQLException e) {
-                        System.err.println("Erro ao adicionar Docente: " + e.getMessage());
-                        return false;
                     }
+                }
+                conn.rollback(); // Desfaz se o código estiver incorreto ou a inserção falhar
+                return false;
+            }
+        } catch (SQLException e) {
+            System.err.println("Erro ao adicionar Docente: " + e.getMessage());
+            try {
+                conn.rollback(); // Desfaz em caso de erro
+            } catch (SQLException ex) {
+                System.err.println("Erro ao realizar rollback: " + ex.getMessage());
             }
             return false;
-
-        } catch (SQLException e) {
-            System.err.println(e.getMessage());
+        } finally {
+            try {
+                conn.setAutoCommit(originalAutoCommit); // Restaura o modo original
+            } catch (SQLException e) {
+                System.err.println("Erro ao restaurar auto-commit: " + e.getMessage());
+            }
         }
-
-             */
-            return false;
     }
+
 
     public static boolean criaPergunta(String msg){
 
         return false;
     }
 
-    public static boolean eliminarPergunta(String msg){
+    public boolean eliminarPergunta(String msg){
 
         int idpergunta = Integer.parseInt(msg);
 
@@ -327,7 +347,7 @@ public class DBManager {
         }
     }
 
-    private static boolean temRespostasAssociadas(int idpergunta) {
+    private boolean temRespostasAssociadas(int idpergunta) {
         String sqlCheck = "SELECT COUNT(*) FROM Resposta WHERE idpergunta = ?";
         try (PreparedStatement pstmt = conn.prepareStatement(sqlCheck)) {
             pstmt.setLong(1, idpergunta);
@@ -359,7 +379,7 @@ public class DBManager {
         StringBuilder where = new StringBuilder(sql);
 /*
         ArrayList<Object> parametros = new ArrayList<>();
-        parametros.add(iddocente);
+        parametros.add(id_docente);
 
         switch (msg){
             case ATIVA:
