@@ -22,6 +22,7 @@ public class Mensagem implements Serializable {
         SUBMETER_RESPOSTA,
         LISTAR_PERGUNTAS_RESPONDIDAS,
         LOGOUT,
+        EXIT,
 
         // Servidor -> Cliente
         LOGIN_SUCESSO,
