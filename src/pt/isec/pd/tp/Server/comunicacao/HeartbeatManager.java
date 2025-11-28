@@ -5,10 +5,7 @@ import pt.isec.pd.tp.Utils.Configs;
 import pt.isec.pd.tp.Server.ServidorMain;
 import pt.isec.pd.tp.Utils.Configs;
 
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.MulticastSocket;
+import java.net.*;
 
 public class HeartbeatManager implements Runnable {
     private final ServidorMain servidor;
@@ -20,14 +17,13 @@ public class HeartbeatManager implements Runnable {
     @Override
     public void run() {
 
-        try (DatagramSocket udpSocket = new DatagramSocket();
-             MulticastSocket multicastSocket = new MulticastSocket()) {
+        try (DatagramSocket udpSocket = new DatagramSocket()) {
 
             udpSocket.setSoTimeout(Configs.SERVER_TIMEOUT_MS);
-            InetAddress diretoriaAddr = InetAddress.getByName(servidor.getDiretoriaIp());
-            InetAddress multicastAddr = InetAddress.getByName(Configs.MULTICAST_ADDRESS);
 
-            String payload = String.format("HEARTBEAT;%d", servidor.getPortoTCPClientes());
+            InetAddress diretoriaAddr = InetAddress.getByName(servidor.getDiretoriaIp());
+
+            String payload = String.format("HEARTBEAT;%d", servidor.getPortoTCPClientes()); // Falta adicionar a versao da BD
 
             byte[] data = payload.getBytes();
 
@@ -38,15 +34,13 @@ public class HeartbeatManager implements Runnable {
             udpPacket = new DatagramPacket(new byte[1024], 1024);
             udpSocket.receive(udpPacket);
 
-            if(servidor.processarRespostaDiretoria(udpPacket) == 1) {
+            servidor.processarRespostaDiretoria(udpPacket);
 
-                DatagramPacket multicastPacket = new DatagramPacket(data, data.length, multicastAddr, Configs.MULTICAST_PORT);
-                multicastSocket.send(multicastPacket);
-            }
 
         } catch (Exception e) {
             servidor.stop();
-            System.out.println("Erro de heartbeat: " + e.getMessage());
+            if(servidor.isRunning())
+                System.out.println("Erro de heartbeat: " + e.getMessage());
         }
     }
 }

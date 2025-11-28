@@ -22,10 +22,9 @@ public class ServidorDiretoriaMain {
     private final int udpPort;
     private DatagramSocket socket;
     private ScheduledExecutorService scheduler;
-    private Thread GeraTeclado, processaPacotes, tcpToServerPrincipal;
+    private Thread GeraTeclado, processaPacotes;
     private Boolean closing = false;
     private ServerSocket servidorSocket;
-    private Socket socketLigacao;
     private boolean tcpOpen = false;
 
     public ServidorDiretoriaMain(int udpPort) {
@@ -49,8 +48,7 @@ public class ServidorDiretoriaMain {
                         } catch (Exception e) {
                             System.out.println("Erro ao notificar servidores sobre encerramento: " + e.getMessage());
                         }
-                        if(socketLigacao != null && !socketLigacao.isClosed())
-                            socketLigacao.close();
+
 
                         break;
                     case "server":
@@ -94,7 +92,6 @@ public class ServidorDiretoriaMain {
                 byte[] buffer = new byte[1024];
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                 socket.receive(packet);
-
                 if(closing)
                     break;
                 processaPacotes =  new Thread(() -> {
@@ -108,6 +105,12 @@ public class ServidorDiretoriaMain {
             if (socket != null && !socket.isClosed()) {
                 socket.close();
                 scheduler.shutdownNow();
+                try { // Force close to release Server should be changed
+                    if (servidorSocket != null && !servidorSocket.isClosed())
+                        servidorSocket.close();
+                } catch (Exception e) {
+                    System.out.println("Erro ao fechar o servidor socket: " + e.getMessage());
+                }
             }
             System.out.println("A fechar o serviço de diretoria...");
         }
@@ -126,8 +129,6 @@ public class ServidorDiretoriaMain {
                     if(!tcpOpen) {
 
                         try {
-                            tcpToServerPrincipal = new Thread(this::TcpToServerPrincipal);
-                            tcpToServerPrincipal.start();
                             tcpOpen = true;
                         } catch (Exception e) {
                             System.out.println("Erro ao abrir porto TCP para comunicar com servidor principal: " + e.getMessage());
@@ -174,7 +175,7 @@ public class ServidorDiretoriaMain {
                 activeServers.sort(Comparator.comparingLong(ServerInfo::getRegistrationTime));
 
                 ServerInfo principal = activeServers.getFirst();
-                responseStr = "OK;"+ principal.getIp().getHostAddress() + ";" + principal.getTcpPortDb();
+                responseStr = "OK;"+ principal.getIp().getHostAddress() + ";" + principal.getTcpPortClientes(); // trocar para ip e porto do principal para obter BD
                 try(DatagramSocket socket = new DatagramSocket()){
                     byte[] buffer = responseStr.getBytes();
                     DatagramPacket responsePacket = new DatagramPacket(buffer, buffer.length, packet.getAddress(), packet.getPort());
@@ -183,8 +184,10 @@ public class ServidorDiretoriaMain {
                 catch (Exception e) {
                     System.out.println("Erro ao registrar servidor: " + e.getMessage());
                 }
+                return;
 
-            } else if (request.startsWith("HEARTBEAT")) {
+            }
+            if (request.startsWith("HEARTBEAT")) {
 
                 for (ServerInfo server : activeServers) {
 
@@ -193,7 +196,10 @@ public class ServidorDiretoriaMain {
                     }
 
                 }
-            } else if (request.startsWith("UNREGISTER")) {
+                return;
+
+            }
+            if (request.startsWith("UNREGISTER")) {
                 // Encontrar e remover o servidor da lista
                 if(activeServers.removeIf(server -> server.equals(packet)))
                 {
@@ -207,7 +213,9 @@ public class ServidorDiretoriaMain {
                         System.out.println("Erro ao enviar unregister response: " + e.getMessage());
                     }
                 }
-            } else if (request.startsWith("REQUEST_SERVER")) {
+                return;
+            }
+            if (request.startsWith("REQUEST_SERVER")) {
                 // Pedido do Cliente para obter o Servidor Principal
 
                 if (activeServers.isEmpty()) {
@@ -218,6 +226,7 @@ public class ServidorDiretoriaMain {
 
                     responseStr = "OK;" + principal.getIp().getHostAddress() + ";" + principal.getTcpPortClientes();
                 }
+                return;
             }
 
             // Enviar resposta
@@ -230,42 +239,6 @@ public class ServidorDiretoriaMain {
         }
     }
 
-    private void TcpToServerPrincipal() {
-
-        try {
-
-            Socket s;
-            PrintStream out;
-            BufferedReader in;
-
-            if (servidorSocket != null) {
-                s = servidorSocket.accept();
-
-                out = new PrintStream(s.getOutputStream());
-                in = new BufferedReader(new InputStreamReader(s.getInputStream()));
-                socketLigacao = s;
-                activeServers.getFirst().setPort(s.getPort());
-            }
-            else
-                return;
-
-
-            while (!closing) {
-
-                out.println(in.readLine());
-
-            }
-            out.println(MessageCodes.CLOSE_CONNECTION);
-
-        } catch (Exception e) {
-            System.out.println("Erro na comunicação TCP com o servidor principal: " + e.getMessage());
-        }
-        finally {
-            System.out.println("Fechando comunicação TCP com o servidor principal.");
-            tcpOpen = false;
-            socket.close();
-        }
-    }
 
     private void checkServerTimeouts() {
         long now = System.currentTimeMillis();

@@ -27,7 +27,6 @@ public class ClienteHandler implements Runnable {
     @Override
     public void run() {
         try {
-            // Definir timeout de autenticação
             socket.setSoTimeout(Configs.AUTH_TIMEOUT_MS);
 
             oos = new ObjectOutputStream(socket.getOutputStream());

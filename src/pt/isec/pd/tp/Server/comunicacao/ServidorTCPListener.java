@@ -10,6 +10,7 @@ import java.net.Socket;
 public class ServidorTCPListener implements Runnable {
     private final ServidorLogica logica;
     private final ServerSocket serverSocket;
+    private Socket clientSocket;
 
     public ServidorTCPListener(ServidorLogica logica, int port) throws Exception {
         this.logica = logica;
@@ -22,7 +23,10 @@ public class ServidorTCPListener implements Runnable {
 
     public void close() {
         try {
-            serverSocket.close();
+            if (clientSocket != null && !clientSocket.isClosed())
+                clientSocket.close();
+            if (!serverSocket.isClosed())
+                serverSocket.close();
         } catch (Exception e) {
             System.err.println("Erro ao fechar o ServidorTCPListener: " + e.getMessage());
         }
@@ -34,7 +38,7 @@ public class ServidorTCPListener implements Runnable {
 
             while (!serverSocket.isClosed()) {
 
-                Socket clientSocket = serverSocket.accept();
+                clientSocket = serverSocket.accept();
 
                 System.out.println("Novo cliente conectado: " + clientSocket.getRemoteSocketAddress());
                 ClienteHandler handler = new ClienteHandler(clientSocket, logica);

@@ -167,12 +167,28 @@ public class ServidorLogica {
         return new Mensagem(Mensagem.Tipo.OPERACAO_SUCESSO, null); // Exemplo
     }
 
+    public Integer getVersaoBaseDados() {
+        return dbManager.getVersaoDB();
+    }
+
     public void addClienteHandler(ClienteHandler handler) {
         activeClients.add(handler);
     }
 
     public void removeClienteHandler(ClienteHandler handler) {
         activeClients.remove(handler);
+    }
+
+    public void processarMensagemMulticast(String mensagem) {
+        if (mensagem == null)
+            return;
+        if(mensagem.split(";").length == 3){
+            Integer versaoBD = Integer.parseInt(mensagem.split(";")[0]);
+            Integer tcpPortClientes = Integer.parseInt(mensagem.split(";")[1]);
+            Integer tcpPortDBSync = Integer.parseInt(mensagem.split(";")[2]);
+
+            //servidorMain.atualizarInfoServidorPrincipal(versaoBD, tcpPortClientes, tcpPortDBSync);
+        }
     }
 
     // Notifica todos os clientes conectados

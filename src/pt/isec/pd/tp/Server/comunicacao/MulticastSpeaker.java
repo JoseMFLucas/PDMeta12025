@@ -5,23 +5,22 @@ import pt.isec.pd.tp.Utils.Configs;
 
 import java.net.*;
 
-public class MulticastListener implements Runnable {
+public class MulticastSpeaker implements Runnable {
+
     private final ServidorLogica logica;
     private final String multicastInterfaceIp; // IP da interface de rede
     private final boolean running;
-    private final MulticastSocket socket;
 
-    public MulticastListener(ServidorLogica logica, String multicastInterfaceIp, boolean running, MulticastSocket socket) {
+    public MulticastSpeaker(ServidorLogica logica, String multicastInterfaceIp, boolean running) {
         this.logica = logica;
         this.multicastInterfaceIp = multicastInterfaceIp;
         this.running = running;
-        this.socket = socket;
     }
 
     @Override
     public void run() {
-        try {
 
+        try(MulticastSocket socket = new MulticastSocket()) {
             if(multicastInterfaceIp == null || multicastInterfaceIp.isEmpty()) {
                 throw new Exception("IP da interface de rede para multicast não definido.");
             }
@@ -29,34 +28,15 @@ public class MulticastListener implements Runnable {
 
             // Definir a interface de rede para o multicast
             NetworkInterface netIf = NetworkInterface.getByInetAddress(InetAddress.getLocalHost());
-            if(netIf == null) {
-                throw new Exception("Interface de rede para multicast não encontrada.");
-            }
             socket.setNetworkInterface(netIf);
 
             socket.joinGroup(group, netIf);
 
-            while (running) {
-                byte[] buffer = new byte[4096]; // Buffer maior para queries SQL
-                DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+            String payload = logica.getVersaoBaseDados().toString() + ";0;0"; // add client handler tcp port and tcp port for db sync
+            byte[] buffer = payload.getBytes();
+            DatagramPacket packet = new DatagramPacket(buffer, buffer.length, group);
+            socket.send(packet);
 
-                socket.receive(packet);
-
-                boolean isOwnPacket = false;
-
-                InetAddress addr = netIf.getInetAddresses().nextElement();
-                if (addr.equals(packet.getAddress())) {
-                    isOwnPacket = true;
-                }
-
-                if(isOwnPacket || logica.isServidorPrincipal()) {
-                    continue;
-                }
-
-                String payload = new String(packet.getData(), 0, packet.getLength());
-                logica.processarMensagemMulticast(payload);
-            }
-            System.out.println("Multicast finalizado.");
         } catch (Exception e) {
             if(running)
                 System.out.println("Warning: " + e.getMessage());

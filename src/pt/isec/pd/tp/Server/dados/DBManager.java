@@ -17,10 +17,12 @@ public class DBManager {
     private static final String DB_FILE_NAME = "pdtp.db";
     private final String dbPath;
     private Connection conn;
+    private int versaoDB;
 
     public DBManager(String dbPath) {
         this.dbPath = dbPath;
         this.conn = connectDB();
+        versaoDB = 0;
     }
 
     private Connection connectDB() {
@@ -429,5 +431,17 @@ public class DBManager {
  */
 
             return null; // perguntas
+    }
+
+    /*public int getPortoDB() {
+        return socket.getPort();
+    }*/
+
+    public void setVersaoDB(int versaoDB) {
+        this.versaoDB = versaoDB;
+    }
+
+    public int getVersaoDB() {
+        return versaoDB;
     }
 }
