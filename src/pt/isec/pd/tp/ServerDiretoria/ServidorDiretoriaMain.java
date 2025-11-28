@@ -173,7 +173,6 @@ public class ServidorDiretoriaMain {
 
                 ServerInfo principal = activeServers.getFirst();
 
-                // Responder com info completa do Principal: IP;PortoCli;PortoDB
                 responseStr = "OK;" + principal.getIp().getHostAddress() + ";"
                         + principal.getTcpPortClientes() + ";"
                         + principal.getTcpPortDb();

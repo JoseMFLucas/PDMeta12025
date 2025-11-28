@@ -84,8 +84,10 @@ public class ServidorMain {
                         int principalDbPort = Integer.parseInt(parts[3]);
 
                         if (principalIp.equals(packet.getAddress().getHostAddress()) && principalDbPort == dbSyncSender.getLocalPort()) {
+                            System.out.println("servidor registado como principal.");
                             setPrincipal(true);
                         } else {
+                            System.out.println("Servidor registado como secundário.");
                             setPrincipal(false);
                             obterBaseDadosDoPrincipal(principalIp, principalDbPort);
                         }
@@ -122,26 +124,25 @@ public class ServidorMain {
             if(response.contains("PRINCIPAL")) {
                 if(!isPrincipal){
                     System.out.println("Servidor agora é o principal.");
+                    setPrincipal(true);
                 }
-                setPrincipal(true);
-
-
-                return;
             }
-            /*
-            else
-            {
-                if(threadComP != null && !threadComP.isAlive()){
-                    principalIp = response.split(";")[1];
-                    principalPort = Integer.parseInt(response.split(";")[2]);
-
-                    System.out.println("Servidor agora é secundário. A comunicar com o principal em " + principalIp + ":" + principalPort);
+            else {
+                if(!isPrincipal) {
+                    String[] parts = response.split(";");
+                    if (parts.length == 3) {
+                        principalIp = parts[1];
+                        principalPort = Integer.parseInt(parts[2]);
+                    } else {
+                        throw new IllegalArgumentException("Resposta de heartbeat inválida: " + response);
+                    }
                     setPrincipal(false);
-                    return;
                 }
+                else {
+                    System.out.println("Server marcado como principal, mas recebeu heartbeat de outro servidor.");
 
+                }
             }
-            */
         } else if( response.contains(MessageCodes.CLOSE_CONNECTION.toString())) {
             if (tcpListener != null) {
                 tcpListener.close();
@@ -192,6 +193,9 @@ public class ServidorMain {
 
     public void stop() {
         System.out.println("A encerrar o servidor...");
+        if (dbSyncSender != null) {
+            dbSyncSender.stop();
+        }
         if(multicastSpeaker != null && !multicastSpeaker.isShutdown())
             multicastSpeaker.shutdownNow();
         if(multicastSocket != null && !multicastSocket.isClosed()) {

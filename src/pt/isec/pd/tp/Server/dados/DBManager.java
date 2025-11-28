@@ -379,63 +379,10 @@ public class DBManager {
                 "WHERE iddocente = ?";
 
         StringBuilder where = new StringBuilder(sql);
-/*
-        ArrayList<Object> parametros = new ArrayList<>();
-        parametros.add(id_docente);
 
-        switch (msg){
-            case ATIVA:
-                where.append(" AND data_hora_inicio <= ? AND data_hora_fim >= ?");
-                parametros.add(datahoraatual);
-                parametros.add(datahoraatual);
-                break;
-            case FUTURAS:
-                where.append(" AND data_hora_inicio > ?");
-                parametros.add(datahoraatual);
-                parametros.add(datahoraatual);
-                break;
-            case EXPIRADAS:
-                where.append(" data_hora_fim < ?");
-                parametros.add(datahoraatual);
-                break;
-        }
-
-        try (PreparedStatement pstmt = conn.prepareStatement(whereClause.toString())) {
-
-            for (int i = 0; i < parametros.size(); i++) {
-                // O primeiro parâmetro é o id_docente
-                if (i == 0) {
-                    pstmt.setInt(i + 1, (Integer) parametros.get(i));
-                } else {
-                    // Os restantes são as Strings da data/hora - Depois converte para DATETIME
-                    pstmt.setString(i + 1, (String) parametros.get(i));
-                }
-                try (ResultSet rs = pstmt.executeQuery()) {
-                    while (rs.next()) {
-                        // Array de resultados
-                        String[] perguntaData = {
-                                String.valueOf(rs.getLong("idpergunta")),
-                                rs.getString("enunciado"),
-                                rs.getString("codigo_acesso"),
-                                rs.getString("data_hora_inicio"),
-                                rs.getString("data_hora_fim"),
-                                String.valueOf(rs.getInt("opcao_correta_indice"))
-                        };
-                        perguntas.add(perguntaData);
-                    }
-                }
-            } catch (SQLException e) {
-                System.err.println("Erro SQL ao listar perguntas: " + e.getMessage());
-            }
-
- */
 
             return null; // perguntas
     }
-
-    /*public int getPortoDB() {
-        return socket.getPort();
-    }*/
 
     public String getDbPath() {
         return dbPath;
