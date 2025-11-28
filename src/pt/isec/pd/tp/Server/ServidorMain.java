@@ -1,9 +1,6 @@
 package pt.isec.pd.tp.Server;
 
-import pt.isec.pd.tp.Server.comunicacao.HeartbeatManager;
-import pt.isec.pd.tp.Server.comunicacao.MulticastListener;
-import pt.isec.pd.tp.Server.comunicacao.MulticastSpeaker;
-import pt.isec.pd.tp.Server.comunicacao.ServidorTCPListener;
+import pt.isec.pd.tp.Server.comunicacao.*;
 import pt.isec.pd.tp.Server.dados.DBManager;
 import pt.isec.pd.tp.Server.logica.ServidorLogica;
 import pt.isec.pd.tp.Utils.Configs;
@@ -26,8 +23,6 @@ public class ServidorMain {
     private String principalIp;
     private int principalPort;
 
-    private ServerSocket socketComP;
-    private Thread threadComP;
     private MulticastSocket multicastSocket;
     private Socket socket;
     private final DBManager dbManager;
@@ -40,15 +35,13 @@ public class ServidorMain {
     private boolean running = true;
 
     private int portoTCPClientes;
+    private DBSyncSender dbSyncSender;
 
     ScheduledExecutorService heartbeat;
     ScheduledExecutorService multicastSpeaker;
 
     public void start() {
         try {
-
-            socketComP = new ServerSocket(0); // Porto aleatório para comunicação com o servidor principal
-
             socket = new Socket();
 
             tcpListener = new ServidorTCPListener(logica, socket.getPort());
@@ -59,12 +52,15 @@ public class ServidorMain {
 
             System.out.println("Servidor escutando clientes em TCP:" + portoTCPClientes);
 
+            dbSyncSender = new DBSyncSender(dbManager.getDbPath());
+            new Thread(dbSyncSender).start();
+
             // Registar no Serviço de Diretoria via UDP
             try(DatagramSocket udpsocket = new DatagramSocket()) {
                 udpsocket.setSoTimeout(Configs.SERVER_TIMEOUT_MS);
 
 
-                String mensagem = "REGISTER;" + portoTCPClientes + ";" + socketComP.getLocalPort(); // DB port placeholder
+                String mensagem = "REGISTER;" + portoTCPClientes + ";" + dbSyncSender.getLocalPort();
                 System.out.println("A registar no Serviço de Diretoria: " + mensagem);
                 byte[] buffer = mensagem.getBytes();
 
@@ -82,20 +78,18 @@ public class ServidorMain {
 
                 String response = new String(responsePacket.getData(), 0, responsePacket.getLength());
                 if(response.startsWith("OK;")) {
+                    String[] parts = response.split(";");
+                    if (parts.length >= 4) {
+                        principalIp = parts[1];
+                        int principalDbPort = Integer.parseInt(parts[3]);
 
-                    if(response.split(";").length == 3) {
-                        principalIp = response.split(";")[1];
-                        principalPort = Integer.parseInt(response.split(";")[2]);
-                        if (principalIp.equals(packet.getAddress().getHostAddress()) && principalPort == getPortoTCPClientes()) {
+                        if (principalIp.equals(packet.getAddress().getHostAddress()) && principalDbPort == dbSyncSender.getLocalPort()) {
                             setPrincipal(true);
-                            System.out.println("Servidor iniciado como principal.");
                         } else {
                             setPrincipal(false);
-                            System.out.println("Servidor iniciado como secundário. A comunicar com o principal em " + principalIp + ":" + principalPort);
+                            obterBaseDadosDoPrincipal(principalIp, principalDbPort);
                         }
                     }
-                    else
-                        throw new Exception("Resposta do servidor com numero de argumentos invalida." + response);
                 } else {
                     throw new Exception("Falha ao registrar o servidor: " + response);
                 }
@@ -134,19 +128,20 @@ public class ServidorMain {
 
                 return;
             }
+            /*
             else
             {
                 if(threadComP != null && !threadComP.isAlive()){
                     principalIp = response.split(";")[1];
                     principalPort = Integer.parseInt(response.split(";")[2]);
-                    /*threadComP = new Thread(this::ComunicadorPrincipalTCP);
-                    threadComP.start();*/
+
                     System.out.println("Servidor agora é secundário. A comunicar com o principal em " + principalIp + ":" + principalPort);
                     setPrincipal(false);
                     return;
                 }
 
             }
+            */
         } else if( response.contains(MessageCodes.CLOSE_CONNECTION.toString())) {
             if (tcpListener != null) {
                 tcpListener.close();
@@ -159,6 +154,24 @@ public class ServidorMain {
             return;
         } else {
             System.err.println("Resposta desconhecida do Serviço de Diretoria: " + response);
+        }
+    }
+
+    private void obterBaseDadosDoPrincipal(String ip, int port) throws IOException {//TODO comfirma se está de acordo com o protocolo NUNO
+        System.out.println("A obter cópia da BD do principal (" + ip + ":" + port + ")...");
+        try (Socket socket = new Socket(ip, port);
+             InputStream is = socket.getInputStream();
+             FileOutputStream fos = new FileOutputStream(dbManager.getDbPath())) {
+
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = is.read(buffer)) != -1) {
+                fos.write(buffer, 0, bytesRead);
+            }
+            System.out.println("Base de dados sincronizada com sucesso.");
+        } catch (IOException e) {
+            System.err.println("Falha crítica ao sincronizar BD: " + e.getMessage());
+            throw e;
         }
     }
 
@@ -179,13 +192,6 @@ public class ServidorMain {
 
     public void stop() {
         System.out.println("A encerrar o servidor...");
-        if(socketComP != null && !socketComP.isClosed()) {
-            try {
-                socketComP.close();
-            } catch (IOException e) {
-                System.err.println("Erro ao fechar socket de comunicação com o principal: " + e.getMessage());
-            }
-        }
         if(multicastSpeaker != null && !multicastSpeaker.isShutdown())
             multicastSpeaker.shutdownNow();
         if(multicastSocket != null && !multicastSocket.isClosed()) {

@@ -117,28 +117,19 @@ public class ServidorDiretoriaMain {
         System.out.println("Thread de principal terminada.");
     }
 
-    private boolean manageTcpConection(DatagramPacket packet, ServerInfo server, String responseStr) {
+    private boolean manageHeartbeat(DatagramPacket packet, ServerInfo server, String responseStr) {
 
         if (server.compareServer(packet)) {
 
             server.updateLastHeartbeatTime();
             try {
+                String [] args = responseStr.split(";");
                 activeServers.sort(Comparator.comparingLong(ServerInfo::getRegistrationTime));
-                if(activeServers.getFirst().equals(server)) {
-
-                    if(!tcpOpen) {
-
-                        try {
-                            tcpOpen = true;
-                        } catch (Exception e) {
-                            System.out.println("Erro ao abrir porto TCP para comunicar com servidor principal: " + e.getMessage());
-                        }
-                    }
+                if(activeServers.getFirst().equals(server))
                     responseStr = "HEARTBEAT;PRINCIPAL";
-                }
-                else {
+                else
                     responseStr = "HEARTBEAT;" + server.getIp().getHostAddress() + ";" + server.getPort();
-                }
+
 
                 try(DatagramSocket socket = new DatagramSocket()){
 
@@ -162,20 +153,30 @@ public class ServidorDiretoriaMain {
             String request = new String(packet.getData(), 0, packet.getLength());
 
             StringTokenizer tokenizer = new StringTokenizer(request, ";");
-            String responseStr = "ERROR;Comando desconhecido";
+            String responseStr = MessageCodes.ERROR.toString();
 
             if (request.startsWith("REGISTER")) {
-                if(tokenizer.countTokens()<3)
-                {
-                    System.out.println("ERROR;Parâmetros insuficientes para registo");
+                String[] args = request.split(";");
+                if(args.length != 3) {
+                    byte[] responseData = responseStr.getBytes();
+                    DatagramPacket responsePacket = new DatagramPacket(responseData, responseData.length, packet.getAddress(), packet.getPort());
+                    socket.send(responsePacket);
                     return;
                 }
-                activeServers.add(new ServerInfo(packet.getAddress(), Integer.parseInt(request.split(";")[1]),  Integer.parseInt(request.split(";")[2])));
 
+                int portCli = Integer.parseInt(args[1]);
+                int portDb = Integer.parseInt(args[2]);
+
+                ServerInfo novoServer = new ServerInfo(packet.getAddress(), portCli, portDb);
+                activeServers.add(novoServer);
                 activeServers.sort(Comparator.comparingLong(ServerInfo::getRegistrationTime));
 
                 ServerInfo principal = activeServers.getFirst();
-                responseStr = "OK;"+ principal.getIp().getHostAddress() + ";" + principal.getTcpPortClientes(); // trocar para ip e porto do principal para obter BD
+
+                // Responder com info completa do Principal: IP;PortoCli;PortoDB
+                responseStr = "OK;" + principal.getIp().getHostAddress() + ";"
+                        + principal.getTcpPortClientes() + ";"
+                        + principal.getTcpPortDb();
                 try(DatagramSocket socket = new DatagramSocket()){
                     byte[] buffer = responseStr.getBytes();
                     DatagramPacket responsePacket = new DatagramPacket(buffer, buffer.length, packet.getAddress(), packet.getPort());
@@ -191,7 +192,7 @@ public class ServidorDiretoriaMain {
 
                 for (ServerInfo server : activeServers) {
 
-                    if(manageTcpConection(packet, server, responseStr)) {
+                    if(manageHeartbeat(packet, server, responseStr)) {
                         break;
                     }
 

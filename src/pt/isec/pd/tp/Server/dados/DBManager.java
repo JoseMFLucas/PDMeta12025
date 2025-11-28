@@ -437,6 +437,10 @@ public class DBManager {
         return socket.getPort();
     }*/
 
+    public String getDbPath() {
+        return dbPath;
+    }
+
     public void setVersaoDB(int versaoDB) {
         this.versaoDB = versaoDB;
     }
