@@ -9,8 +9,11 @@ import java.nio.file.Paths;
 import java.sql.*;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import pt.isec.pd.tp.Utils.CodigoAcessoGenerator;
 
 public class DBManager {
 
@@ -105,22 +108,23 @@ public class DBManager {
                         // Tabela Opcao
                         "CREATE TABLE Opcao (" +
                         "    idopcao INTEGER PRIMARY KEY AUTOINCREMENT," +
-                        "    idpergunta INTEGER UNIQUE NOT NULL," +
-                        "    indice INTEGER UNIQUE NOT NULL," +
+                        "    idpergunta INTEGER NOT NULL," +
+                        "    indice INTEGER NOT NULL," +
                         "    texto TEXT NOT NULL," +
-                        "    FOREIGN KEY (idpergunta) REFERENCES Pergunta(idpergunta)" +
+                        "    FOREIGN KEY (idpergunta) REFERENCES Pergunta(idpergunta)," +
+                        "    UNIQUE (idpergunta, indice)" +
                         ");" +
 
                         // Tabela Resposta
                         "CREATE TABLE Resposta (" +
                         "    idpergunta INTEGER NOT NULL," +
-                        "    idestudante INTEGER NOT NULL," +
+                        "    numero_estudante INTEGER NOT NULL," +
                         "    data_hora_realizacao DATETIME NOT NULL," +
                         "    opcao_escolhida_indice INTEGER NOT NULL," +
                         "    esta_certa BOOLEAN NOT NULL," +
-                        "    PRIMARY KEY (idpergunta, idestudante, data_hora_realizacao)," +
+                        "    PRIMARY KEY (idpergunta, numero_estudante)," +
                         "    FOREIGN KEY (idpergunta) REFERENCES Pergunta(idpergunta)," +
-                        "    FOREIGN KEY (idestudante) REFERENCES Estudante(estudante_id)" +
+                        "    FOREIGN KEY (numero_estudante) REFERENCES Estudante(numero_estudante)" +
                         ");" +
 
                         "INSERT INTO Configuracao (codigoregisto, versao)" +
@@ -193,7 +197,7 @@ public class DBManager {
         if (conn == null) {
             return -1;
         }
-        String idColumn = userType.equals("DOCENTE") ? "iddocente" : "numero_estudante";
+        String idColumn = userType.equals("DOCENTE") ? "iddocente" : "idestudante";
         String sql = "SELECT " + idColumn + " FROM " + userType + " WHERE email = ?";
 
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -305,14 +309,249 @@ public class DBManager {
     }
 
 
-    public static boolean criaPergunta(String msg){
+    public String[] criaPergunta(String[] msg){
+        if (conn == null || msg.length != 6) {
+            return null;
+        }
 
-        return false;
+        String sqlAddPergunta = "INSERT INTO Pergunta (iddocente, enunciado, codigo_acesso, data_hora_inicio, data_hora_fim, opcao_correta_indice) VALUES (?, ?, ?, ?, ?, ?)";
+        String sqlAddOpcao = "INSERT INTO Opcao (idpergunta, indice, texto) VALUES (?, ?, ?)";
+
+        boolean originalAutoCommit = false;
+        int idpergunta = -1;
+
+        try {
+            originalAutoCommit = conn.getAutoCommit();
+            conn.setAutoCommit(false); // Inicia a transação
+
+            // 1. Inserir a pergunta
+            try (PreparedStatement pstmt = conn.prepareStatement(sqlAddPergunta)) {
+                pstmt.setInt(1, Integer.parseInt(msg[0]));
+                pstmt.setString(2, msg[1]);
+                pstmt.setString(3, CodigoAcessoGenerator.gerarCodigo());
+                pstmt.setString(4, msg[3]);
+                pstmt.setString(5, msg[4]);
+                pstmt.setInt(6, Integer.parseInt(msg[5]));
+
+                int linhasAfetadas = pstmt.executeUpdate();
+                if (linhasAfetadas == 0) {
+                    throw new SQLException("Falha ao inserir a pergunta, nenhuma linha afetada.");
+                }
+            }
+
+            // 2. Obter o ID da pergunta gerado (forma correta para SQLite)
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("SELECT last_insert_rowid()")) {
+                if (rs.next()) {
+                    idpergunta = rs.getInt(1);
+                } else {
+                    throw new SQLException("Falha ao obter o ID da pergunta (last_insert_rowid).");
+                }
+            }
+
+            // 3. Inserir as opções
+            String opcoesString = msg[2].substring(1, msg[2].length() - 1);
+            String[] opcoes = opcoesString.split(", ");
+
+            try (PreparedStatement pstmtOpcao = conn.prepareStatement(sqlAddOpcao)) {
+                for (int i = 0; i < opcoes.length; i++) {
+                    pstmtOpcao.setInt(1, idpergunta);
+                    pstmtOpcao.setInt(2, i + 1);
+                    pstmtOpcao.setString(3, opcoes[i]);
+                    pstmtOpcao.addBatch();
+                }
+                pstmtOpcao.executeBatch();
+            }
+
+            conn.commit(); // Confirma a transação
+
+            // 4. Retorna os detalhes da pergunta recém-criada
+            return visualizarPergunta(idpergunta);
+
+        } catch (SQLException | NumberFormatException e) {
+            System.err.println("Erro ao criar pergunta: " + e.getMessage());
+            try {
+                if (conn != null) conn.rollback();
+            } catch (SQLException ex) {
+                System.err.println("Erro ao realizar rollback: " + ex.getMessage());
+            }
+            return null;
+        } finally {
+            try {
+                if (conn != null) conn.setAutoCommit(originalAutoCommit);
+            } catch (SQLException e) {
+                System.err.println("Erro ao restaurar auto-commit: " + e.getMessage());
+            }
+        }
     }
 
-    public boolean eliminarPergunta(String msg){
+    public String[] visualizarPergunta(int idpergunta) {
+        if (conn == null) {
+            return null;
+        }
 
-        int idpergunta = Integer.parseInt(msg);
+        String sqlPergunta = "SELECT iddocente, enunciado, codigo_acesso, data_hora_inicio, data_hora_fim, opcao_correta_indice FROM Pergunta WHERE idpergunta = ?";
+        String sqlOpcoes = "SELECT texto FROM Opcao WHERE idpergunta = ? ORDER BY indice ASC";
+
+        try {
+            String idDocente, enunciado, codigoAcesso, dataInicio, dataFim, opcaoCorreta;
+            List<String> opcoesList = new ArrayList<>();
+
+            // 1. Obter dados da pergunta
+            try (PreparedStatement pstmt = conn.prepareStatement(sqlPergunta)) {
+                pstmt.setInt(1, idpergunta);
+                try (ResultSet rs = pstmt.executeQuery()) {
+                    if (rs.next()) {
+                        idDocente = String.valueOf(rs.getInt("iddocente"));
+                        enunciado = rs.getString("enunciado");
+                        codigoAcesso = rs.getString("codigo_acesso");
+                        dataInicio = rs.getString("data_hora_inicio");
+                        dataFim = rs.getString("data_hora_fim");
+                        opcaoCorreta = String.valueOf(rs.getInt("opcao_correta_indice"));
+                    } else {
+                        return null; // Pergunta não encontrada
+                    }
+                }
+            }
+
+            // 2. Obter as opções
+            try (PreparedStatement pstmt = conn.prepareStatement(sqlOpcoes)) {
+                pstmt.setInt(1, idpergunta);
+                try (ResultSet rs = pstmt.executeQuery()) {
+                    while (rs.next()) {
+                        opcoesList.add(rs.getString("texto"));
+                    }
+                }
+            }
+
+            // 3. Montar o array de strings no formato desejado
+            String opcoesString = Arrays.toString(opcoesList.toArray(new String[0]));
+
+            return new String[]{String.valueOf(idpergunta), idDocente, enunciado, opcoesString, dataInicio, dataFim, opcaoCorreta, codigoAcesso};
+
+        } catch (SQLException e) {
+            System.err.println("Erro ao visualizar pergunta: " + e.getMessage());
+            return null;
+        }
+    }
+
+    public boolean editarPergunta(String[] dadosEdicao) {
+        if (conn == null || dadosEdicao == null || dadosEdicao.length != 7) {
+            return false;
+        }
+
+        boolean originalAutoCommit = false;
+        try {
+            int idPergunta = Integer.parseInt(dadosEdicao[0]);
+            String idDocente = dadosEdicao[1]; // Não usado para update, mas vem no payload
+            String enunciado = dadosEdicao[2];
+            String opcoesString = dadosEdicao[3];
+            String dataInicio = dadosEdicao[4];
+            String dataFim = dadosEdicao[5];
+            int opcaoCorreta = Integer.parseInt(dadosEdicao[6]);
+
+            // Regra de negócio: não editar se já houver respostas
+            if (temRespostasAssociadas(idPergunta)) {
+                System.err.println("Tentativa de editar pergunta com respostas associadas.");
+                return false;
+            }
+
+            originalAutoCommit = conn.getAutoCommit();
+            conn.setAutoCommit(false); // Inicia a transação
+
+            // 1. Atualizar a tabela Pergunta
+            String sqlUpdatePergunta = "UPDATE Pergunta SET enunciado = ?, data_hora_inicio = ?, data_hora_fim = ?, opcao_correta_indice = ? WHERE idpergunta = ?";
+            try (PreparedStatement pstmt = conn.prepareStatement(sqlUpdatePergunta)) {
+                pstmt.setString(1, enunciado);
+                pstmt.setString(2, dataInicio);
+                pstmt.setString(3, dataFim);
+                pstmt.setInt(4, opcaoCorreta);
+                pstmt.setInt(5, idPergunta);
+                pstmt.executeUpdate();
+            }
+
+            // 2. Apagar as opções antigas
+            String sqlDeleteOpcoes = "DELETE FROM Opcao WHERE idpergunta = ?";
+            try (PreparedStatement pstmt = conn.prepareStatement(sqlDeleteOpcoes)) {
+                pstmt.setInt(1, idPergunta);
+                pstmt.executeUpdate();
+            }
+
+            // 3. Inserir as novas opções
+            String[] novasOpcoes = opcoesString.substring(1, opcoesString.length() - 1).split(", ");
+            String sqlInsertOpcao = "INSERT INTO Opcao (idpergunta, indice, texto) VALUES (?, ?, ?)";
+            try (PreparedStatement pstmt = conn.prepareStatement(sqlInsertOpcao)) {
+                for (int i = 0; i < novasOpcoes.length; i++) {
+                    pstmt.setInt(1, idPergunta);
+                    pstmt.setInt(2, i + 1);
+                    pstmt.setString(3, novasOpcoes[i]);
+                    pstmt.addBatch();
+                }
+                pstmt.executeBatch();
+            }
+
+            conn.commit(); // Confirma a transação
+            return true;
+
+        } catch (SQLException | NumberFormatException e) {
+            System.err.println("Erro ao editar pergunta: " + e.getMessage());
+            try {
+                if (conn != null) conn.rollback();
+            } catch (SQLException ex) {
+                System.err.println("Erro ao realizar rollback: " + ex.getMessage());
+            }
+            return false;
+        } finally {
+            try {
+                if (conn != null) conn.setAutoCommit(originalAutoCommit);
+            } catch (SQLException e) {
+                System.err.println("Erro ao restaurar auto-commit: " + e.getMessage());
+            }
+        }
+    }
+
+    public boolean editarPerfilDocente(String[] dadosEdicao) {
+        if (conn == null || dadosEdicao == null || dadosEdicao.length != 4) {
+            return false;
+        }
+
+        int idDocente = Integer.parseInt(dadosEdicao[0]);
+        String campo = dadosEdicao[1];
+        String novoValor = dadosEdicao[2];
+        String codigoRegisto = dadosEdicao[3];
+
+        String sqlCheckCode = "SELECT codigoregisto FROM Configuracao WHERE codigoregisto = ?";
+        String sqlUpdate = "UPDATE Docente SET " + campo + " = ? WHERE iddocente = ?";
+
+        try {
+            // 1. Verificar o código de registo
+            try (PreparedStatement pstmt = conn.prepareStatement(sqlCheckCode)) {
+                pstmt.setString(1, codigoRegisto);
+                try (ResultSet rs = pstmt.executeQuery()) {
+                    if (!rs.next()) {
+                        // Código de registo inválido
+                        System.err.println("Código de registo de docente inválido.");
+                        return false;
+                    }
+                }
+            }
+
+            // 2. Se o código for válido, atualizar o perfil
+            try (PreparedStatement pstmt = conn.prepareStatement(sqlUpdate)) {
+                pstmt.setString(1, novoValor);
+                pstmt.setInt(2, idDocente);
+                int linhasAfetadas = pstmt.executeUpdate();
+                return linhasAfetadas > 0;
+            }
+
+        } catch (SQLException | NumberFormatException e) {
+            System.err.println("Erro ao editar perfil do docente: " + e.getMessage());
+            return false;
+        }
+    }
+
+
+    public boolean eliminarPergunta(int idpergunta){
 
         if (temRespostasAssociadas(idpergunta)) {
             System.out.println("Não é possível eliminar a pergunta. Já tem respostas associadas.");
@@ -383,21 +622,190 @@ public class DBManager {
         return false;
     }
 
-    public List<String[]> listarPerguntasDocente(int id_docente, String msg){
-        List<String[]> Perguntas = new ArrayList<>();
+    public List<String[]> listarPerguntasDocente(int id_docente, String filtro) {
+        if (conn == null) {
+            return null;
+        }
 
-        LocalDateTime agora = LocalDateTime.now();
+        List<String[]> perguntas = new ArrayList<>();
+        String sql = "SELECT idpergunta, enunciado, codigo_acesso, data_hora_inicio, data_hora_fim FROM Pergunta WHERE iddocente = ?";
 
-        Timestamp datahoraatualTimestamp = Timestamp.valueOf(agora);
+        String agora = "datetime('now', 'localtime')";
 
-        String sql = "SELECT idpergunta, enunciado, codigo_acesso, data_hora_inicio, data_hora_fim, opcao_correta_indice " +
-                "FROM Pergunta " +
-                "WHERE iddocente = ?";
+        switch (filtro.toLowerCase()) {
+            case "ativas":
+                sql += " AND datetime(replace(data_hora_inicio, '/', '-')) <= " + agora + " AND datetime(replace(data_hora_fim, '/', '-')) >= " + agora;
+                break;
+            case "futuras":
+                sql += " AND datetime(replace(data_hora_inicio, '/', '-')) > " + agora;
+                break;
+            case "expiradas":
+                sql += " AND datetime(replace(data_hora_fim, '/', '-')) < " + agora;
+                break;
+            case "todas":
+                break;
+            default:
+                return null; // Filtro inválido
+        }
 
-        StringBuilder where = new StringBuilder(sql);
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, id_docente);
 
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    String[] pergunta = {
+                            String.valueOf(rs.getInt("idpergunta")),
+                            rs.getString("enunciado"),
+                            rs.getString("codigo_acesso"),
+                            rs.getString("data_hora_inicio"),
+                            rs.getString("data_hora_fim")
+                    };
+                    perguntas.add(pergunta);
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Erro ao listar perguntas do docente: " + e.getMessage());
+            return null;
+        }
 
-            return null; // perguntas
+        return perguntas;
+    }
+
+    public List<String[]> listarPerguntasRespondidas(int idEstudante) {
+        if (conn == null) {
+            return null;
+        }
+
+        List<String[]> perguntasRespondidas = new ArrayList<>();
+        String sql = "SELECT p.enunciado, r.data_hora_realizacao, r.opcao_escolhida_indice, r.esta_certa " +
+                     "FROM Resposta r " +
+                     "JOIN Pergunta p ON r.idpergunta = p.idpergunta " +
+                     "WHERE r.idestudante = ? " +
+                     "ORDER BY r.data_hora_realizacao DESC";
+
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, idEstudante);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    String[] resposta = {
+                            rs.getString("enunciado"),
+                            rs.getString("data_hora_realizacao"),
+                            String.valueOf(rs.getInt("opcao_escolhida_indice")),
+                            rs.getBoolean("esta_certa") ? "Correta" : "Incorreta"
+                    };
+                    perguntasRespondidas.add(resposta);
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Erro ao listar perguntas respondidas: " + e.getMessage());
+            return null;
+        }
+
+        return perguntasRespondidas;
+    }
+
+    public String[] obterPerguntaPorCodigo(String codigo) {
+        if (conn == null) return null;
+
+        String sql = "SELECT idpergunta, enunciado FROM Pergunta WHERE codigo_acesso = ? AND datetime(replace(data_hora_inicio, '/', '-')) <= datetime('now', 'localtime') AND datetime(replace(data_hora_fim, '/', '-')) >= datetime('now', 'localtime')";
+        String sqlOpcoes = "SELECT texto FROM Opcao WHERE idpergunta = ? ORDER BY indice ASC";
+
+        try {
+            int idPergunta;
+            String enunciado;
+            List<String> opcoesList = new ArrayList<>();
+
+            try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                pstmt.setString(1, codigo);
+                try (ResultSet rs = pstmt.executeQuery()) {
+                    if (rs.next()) {
+                        idPergunta = rs.getInt("idpergunta");
+                        enunciado = rs.getString("enunciado");
+                    } else {
+                        return null; // Nenhuma pergunta ativa encontrada com este código
+                    }
+                }
+            }
+
+            try (PreparedStatement pstmt = conn.prepareStatement(sqlOpcoes)) {
+                pstmt.setInt(1, idPergunta);
+                try (ResultSet rs = pstmt.executeQuery()) {
+                    while (rs.next()) {
+                        opcoesList.add(rs.getString("texto"));
+                    }
+                }
+            }
+
+            String opcoesString = Arrays.toString(opcoesList.toArray(new String[0]));
+            return new String[]{String.valueOf(idPergunta), enunciado, opcoesString};
+
+        } catch (SQLException e) {
+            System.err.println("Erro ao obter pergunta por código: " + e.getMessage());
+            return null;
+        }
+    }
+
+    public boolean submeterResposta(int idEstudante, int idPergunta, int opcaoEscolhida) {
+        if (conn == null) return false;
+
+        String sqlGetRespostaCorreta = "SELECT opcao_correta_indice FROM Pergunta WHERE idpergunta = ?";
+        String sqlInsertResposta = "INSERT INTO Resposta (idpergunta, idestudante, data_hora_realizacao, opcao_escolhida_indice, esta_certa) VALUES (?, ?, ?, ?, ?)";
+
+        try {
+            int opcaoCorreta;
+            try (PreparedStatement pstmt = conn.prepareStatement(sqlGetRespostaCorreta)) {
+                pstmt.setInt(1, idPergunta);
+                try (ResultSet rs = pstmt.executeQuery()) {
+                    if (rs.next()) {
+                        opcaoCorreta = rs.getInt("opcao_correta_indice");
+                    } else {
+                        return false; // Pergunta não existe
+                    }
+                }
+            }
+
+            boolean estaCerta = (opcaoEscolhida == opcaoCorreta);
+            String dataHoraAtual = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+
+            try (PreparedStatement pstmt = conn.prepareStatement(sqlInsertResposta)) {
+                pstmt.setInt(1, idPergunta);
+                pstmt.setInt(2, idEstudante);
+                pstmt.setString(3, dataHoraAtual);
+                pstmt.setInt(4, opcaoEscolhida);
+                pstmt.setBoolean(5, estaCerta);
+
+                int linhasAfetadas = pstmt.executeUpdate();
+                return linhasAfetadas > 0;
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Erro ao submeter resposta: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean editarPerfilEstudante(String[] dadosEdicao) {
+        if (conn == null || dadosEdicao == null || dadosEdicao.length != 3) {
+            return false;
+        }
+
+        int idEstudante = Integer.parseInt(dadosEdicao[0]);
+        String campo = dadosEdicao[1];
+        String novoValor = dadosEdicao[2];
+
+        String sqlUpdate = "UPDATE Estudante SET " + campo + " = ? WHERE idestudante = ?";
+
+        try {
+            try (PreparedStatement pstmt = conn.prepareStatement(sqlUpdate)) {
+                pstmt.setString(1, novoValor);
+                pstmt.setInt(2, idEstudante);
+                int linhasAfetadas = pstmt.executeUpdate();
+                return linhasAfetadas > 0;
+            }
+        } catch (SQLException | NumberFormatException e) {
+            System.err.println("Erro ao editar perfil do estudante: " + e.getMessage());
+            return false;
+        }
     }
 
     public String getDbPath() {
