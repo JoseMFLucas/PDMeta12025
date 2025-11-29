@@ -6,10 +6,7 @@ import pt.isec.pd.tp.Server.dados.DBManager;
 import pt.isec.pd.tp.Client.Client;
 import pt.isec.pd.tp.Utils.Mensagem;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
 // Responsável pela Lógica de Negócio
 public class ServidorLogica {
@@ -31,18 +28,13 @@ public class ServidorLogica {
         return servidorMain.isPrincipal();
     }
 
-    // TODO: Implementar métodos para processar pedidos dos clientes
-    // Estes métodos serão chamados pelo ClienteHandler
-
-    public Mensagem processarLoginRegisto(Mensagem msg) {
+    public Mensagem processarLoginRegisto(Mensagem msg, ClienteHandler handler) {
 
         if (msg.getTipo() == Mensagem.Tipo.LOGIN) {
-
             Client clientToAuthenticate = (Client) msg.getPayload();
-
             String tipoUser = dbManager.login(clientToAuthenticate);
 
-            if(tipoUser != null){
+            if (tipoUser != null) {
                 int idUser = dbManager.getUserId(clientToAuthenticate.getEmail(), tipoUser);
 
                 clientToAuthenticate.setTipo(Client.Tipo.valueOf(tipoUser));
@@ -56,27 +48,31 @@ public class ServidorLogica {
                 return new Mensagem(Mensagem.Tipo.LOGIN_FALHOU, null);
             }
         }
-        if(msg.getTipo() == Mensagem.Tipo.REGISTO_ESTUDANTE){
+
+        if (msg.getTipo() == Mensagem.Tipo.REGISTO_ESTUDANTE) {
             if (!(msg.getPayload() instanceof String[])) {
                 return new Mensagem(Mensagem.Tipo.REGISTO_FALHOU, "Payload de registo inválido.");
             }
-            if(dbManager.registarEstudante((String []) msg.getPayload())){
+            if (dbManager.registarEstudante((String[]) msg.getPayload())) {
+                // Notifica todos os outros clientes
+                notificarClientes(new Mensagem(Mensagem.Tipo.NOTIFICACAO_ASSINCRONA, "Um novo estudante foi registado."), handler);
                 return new Mensagem(Mensagem.Tipo.REGISTO_SUCESSO, null);
-            } else{
-                System.out.println("Registo falhou");
+            } else {
+                System.out.println("Registo de estudante falhou");
                 return new Mensagem(Mensagem.Tipo.REGISTO_FALHOU, null);
             }
         }
 
-        if(msg.getTipo() == Mensagem.Tipo.REGISTO_DOCENTE){
+        if (msg.getTipo() == Mensagem.Tipo.REGISTO_DOCENTE) {
             if (!(msg.getPayload() instanceof String[])) {
                 return new Mensagem(Mensagem.Tipo.REGISTO_FALHOU, "Payload de registo inválido.");
             }
-
-            if(dbManager.registarDocente((String []) msg.getPayload())){
+            if (dbManager.registarDocente((String[]) msg.getPayload())) {
+                // Notifica todos os outros clientes
+                notificarClientes(new Mensagem(Mensagem.Tipo.NOTIFICACAO_ASSINCRONA, "Um novo docente foi registado."), handler);
                 return new Mensagem(Mensagem.Tipo.REGISTO_SUCESSO, null);
-            } else{
-                System.out.println("Registo falhou");
+            } else {
+                System.out.println("Registo de docente falhou");
                 return new Mensagem(Mensagem.Tipo.REGISTO_FALHOU, null);
             }
         }
@@ -84,73 +80,90 @@ public class ServidorLogica {
         return new Mensagem(Mensagem.Tipo.EXIT, null);
     }
 
-    public Mensagem processarMensagem(Mensagem msg) {
+    public Mensagem processarMensagem(Mensagem msg, ClienteHandler handler) {
         if (!isServidorPrincipal()) {
             return new Mensagem(Mensagem.Tipo.ERRO, "Servidor não é o principal");
         }
 
-        // TODO: VERIFICAR O TIPO DE UTILIZADOR
-        // SEPARAR O TIPO DE MENSAGENS PARA CADA TIPO DE UTILIZADOR
-
-        boolean houveAlteracaoBD = false;
-
         switch (msg.getTipo()) {
-            // Casos de Escrita (alteram BD)
+            // Escrita DB
             case CRIAR_PERGUNTA:
-                System.out.println("Criar pergunta");
-                //houveAlteracaoBD = dbManager.criaPergunta(user, (String []) msg.getPayload());
+                String[] novaPergunta = dbManager.criaPergunta((String[]) msg.getPayload());
+                if (novaPergunta != null) {
+                    notificarClientes(new Mensagem(Mensagem.Tipo.NOTIFICACAO_ASSINCRONA, "Nova pergunta foi criada."), handler);
+                    return new Mensagem(Mensagem.Tipo.DETALHES_PERGUNTA, novaPergunta);
+                }
+                break;
+            case VISUALIZAR_PERGUNTA:
+                String[] dadospergunta = dbManager.visualizarPergunta((int) msg.getPayload());
+
+                if(dadospergunta != null){
+                    return new Mensagem(Mensagem.Tipo.DETALHES_PERGUNTA, dadospergunta);
+                }
                 break;
             case EDITAR_PERGUNTA:
-                // TODO: 1. Validar dados da pergunta
-                // TODO: 2. Chamar dbManager.editarPergunta( (Pergunta) msg.getPayload() )
-                // houveAlteracaoBD = dbManager.editarPergunta(...);
-
-                /*if(dbManager.editarPergunta(msg)){
-                    notificarClientes(new Mensagem(Mensagem.Tipo.OPERACAO_SUCESSO, null));
-                }else{
-                    return new Mensagem(Mensagem.Tipo.OPERACAO_FALHOU, null);
-                }*/
-                break;
-            case ELIMINAR_PERGUNTA:
-                // TODO: 1. Validar dados da pergunta
-                // TODO: 2. Chamar dbManager.eliminarPergunta( (Pergunta) msg.getPayload() )
-                // houveAlteracaoBD = dbManager.eliminarPergunta(...);
-
-                if(dbManager.eliminarPergunta((String)msg.getPayload())){
-                    notificarClientes(new Mensagem(Mensagem.Tipo.OPERACAO_SUCESSO, null));
+                if(dbManager.editarPergunta((String[]) msg.getPayload())) {
+                    notificarClientes(new Mensagem(Mensagem.Tipo.NOTIFICACAO_ASSINCRONA, "Uma pergunta foi editada."), handler);
+                    return new Mensagem(Mensagem.Tipo.OPERACAO_SUCESSO, null);
                 }else{
                     return new Mensagem(Mensagem.Tipo.OPERACAO_FALHOU, null);
                 }
+            case ELIMINAR_PERGUNTA:
+                if(dbManager.eliminarPergunta((int)msg.getPayload())){
+                    notificarClientes(new Mensagem(Mensagem.Tipo.NOTIFICACAO_ASSINCRONA, "Uma pergunta foi eliminada."), handler);
+                    return new Mensagem(Mensagem.Tipo.OPERACAO_SUCESSO, null);
+                }else{
+                    return new Mensagem(Mensagem.Tipo.OPERACAO_FALHOU, null);
+                }
+            case EDITAR_PERFIL_DOCENTE:
+                if (dbManager.editarPerfilDocente((String[]) msg.getPayload())) {
+                    return new Mensagem(Mensagem.Tipo.OPERACAO_SUCESSO, null);
+                }else{
+                    return new Mensagem(Mensagem.Tipo.OPERACAO_FALHOU, null);
+                }
+            case OBTER_PERGUNTA:
+                String[] perguntaAtiva = dbManager.obterPerguntaPorCodigo((String) msg.getPayload());
+                if (perguntaAtiva != null) {
+                    return new Mensagem(Mensagem.Tipo.DETALHES_PERGUNTA_ESTUDANTE, perguntaAtiva);
+                }
                 break;
             case SUBMETER_RESPOSTA:
-                // TODO: 1. Validar dados da pergunta
-                // TODO: 2. Chamar dbManager.submeterResposta( (Pergunta) msg.getPayload() )
-                // houveAlteracaoBD = dbManager.submeterResposta(...);
+                String[] dadosResposta = (String[]) msg.getPayload();
+                int idEstudante = Integer.parseInt(dadosResposta[0]);
+                int idPergunta = Integer.parseInt(dadosResposta[1]);
+                int opcaoEscolhida = Integer.parseInt(dadosResposta[2]);
+                if (dbManager.submeterResposta(idEstudante, idPergunta, opcaoEscolhida)) {
+                    return new Mensagem(Mensagem.Tipo.OPERACAO_SUCESSO, null);
+                }
                 break;
-
-            // Casos de Leitura (não alteram BD)
+            case EDITAR_PERFIL_ESTUDANTE:
+                if (dbManager.editarPerfilEstudante((String[]) msg.getPayload())) {
+                    return new Mensagem(Mensagem.Tipo.OPERACAO_SUCESSO, null);
+                }
+                break;
+            // Leitura DB
             case LISTAR_PERGUNTAS_DOCENTE:
-                // TODO: Chamar dbManager.listarPerguntasDocente(...)
-                // return new Mensagem(Mensagem.Tipo.LISTA_PERGUNTAS, lista);
+                String[] payload = (String[]) msg.getPayload();
+                int idDocente = Integer.parseInt(payload[0]);
+                String filtro = payload[1];
+                List<String[]> perguntas = dbManager.listarPerguntasDocente(idDocente, filtro);
+                if (perguntas != null) {
+                    return new Mensagem(Mensagem.Tipo.LISTA_PERGUNTAS, perguntas);
+                }
                 break;
             case LISTAR_RESULTADOS_PERGUNTA:
-                // TODO: Chamar dbManager.listarResultadosPergunta(...)
-                // return new Mensagem(Mensagem.Tipo.LISTA_PERGUNTAS, lista);
+                // TODO
                 break;
             case LISTAR_PERGUNTAS_RESPONDIDAS:
-                // TODO: Chamar dbManager.listarPerguntasRespondidas(...)
-                // return new Mensagem(Mensagem.Tipo.LISTA_PERGUNTAS, lista);
-                break;
-
-           //Logout
-
-            case LOGOUT:
-                // TODO: LOGOUT CLIENTE
+                List<String[]> respostas = dbManager.listarPerguntasRespondidas((int) msg.getPayload());
+                if (respostas != null) {
+                    return new Mensagem(Mensagem.Tipo.LISTA_PERGUNTAS_RESPONDIDAS, respostas);
+                }
                 break;
         }
 
-
-        return new Mensagem(Mensagem.Tipo.OPERACAO_SUCESSO, null); // Exemplo
+        // Se nenhuma das operações acima retornou, a operação falhou.
+        return new Mensagem(Mensagem.Tipo.OPERACAO_FALHOU, null);
     }
 
     public Integer getVersaoBaseDados() {
