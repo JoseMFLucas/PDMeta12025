@@ -27,20 +27,17 @@ public class DBManager {
 
     private Connection connectDB() {
         Path providedPath = Paths.get(this.dbPath).normalize();
-        Path dbFilePath = providedPath;
 
-        if (Files.isDirectory(providedPath)) {
-            dbFilePath = providedPath.resolve(DB_FILE_NAME);
-        }
+        Path dbFolder = providedPath;
+        Path dbFilePath = dbFolder.resolve(DB_FILE_NAME);
 
-        Path dbFolder = dbFilePath.getParent();
         String dbUrl = "jdbc:sqlite:" + dbFilePath.toAbsolutePath();
 
         Connection connection = null;
         boolean dbExists = Files.exists(dbFilePath);
 
         try {
-            if (dbFolder != null && !Files.exists(dbFolder)) {
+            if (!Files.exists(dbFolder)) {
                 Files.createDirectories(dbFolder);
                 System.out.println("Pasta " + dbFolder + " criada");
             }
@@ -87,7 +84,7 @@ public class DBManager {
                         // Tabela Estudante
                         "CREATE TABLE Estudante (" +
                         "    idestudante INTEGER PRIMARY KEY AUTOINCREMENT," +
-                        "    numero_estudante TEXT UNIQUE NOT NULL," +
+                        "    numero_estudante INTEGER UNIQUE NOT NULL," +
                         "    nome TEXT NOT NULL," +
                         "    email TEXT UNIQUE NOT NULL," +
                         "    password TEXT NOT NULL" +
@@ -192,6 +189,26 @@ public class DBManager {
         return false;
     }
 
+    public int getUserId(String email, String userType) {
+        if (conn == null) {
+            return -1;
+        }
+        String idColumn = userType.equals("DOCENTE") ? "iddocente" : "numero_estudante";
+        String sql = "SELECT " + idColumn + " FROM " + userType + " WHERE email = ?";
+
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, email);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Erro ao obter ID do utilizador: " + e.getMessage());
+        }
+        return -1;
+    }
+
     public boolean registarEstudante(String[] msg) {
         if (conn == null || msg.length != 4) {
             return false;
@@ -202,10 +219,10 @@ public class DBManager {
 
         try {
             originalAutoCommit = conn.getAutoCommit();
-            conn.setAutoCommit(false); // Inicia a transação
+            conn.setAutoCommit(false);
 
             try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-                pstmt.setString(1, msg[0]);
+                pstmt.setInt(1, Integer.parseInt(msg[0]));
                 pstmt.setString(2, msg[1]);
                 pstmt.setString(3, msg[2]);
                 pstmt.setString(4, msg[3]);
@@ -213,13 +230,12 @@ public class DBManager {
                 int linhasAfetadas = pstmt.executeUpdate();
 
                 if (linhasAfetadas > 0) {
-                    conn.commit(); // Confirma a transação
+                    conn.commit();
                     return true;
-                } else {
-                    conn.rollback(); // Desfaz se nada foi inserido
-                    return false;
                 }
             }
+            conn.rollback();
+            return false;
         } catch (SQLException e) {
             System.err.println("Erro ao adicionar Estudante: " + e.getMessage());
             try {
