@@ -2,8 +2,6 @@ package pt.isec.pd.tp.Server.comunicacao;
 
 import pt.isec.pd.tp.Server.logica.ServidorLogica;
 import pt.isec.pd.tp.Utils.Configs;
-import pt.isec.pd.tp.Server.logica.ServidorLogica;
-import pt.isec.pd.tp.Utils.Configs;
 import pt.isec.pd.tp.Utils.Mensagem;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -32,6 +30,9 @@ public class ClienteHandler implements Runnable {
             oos = new ObjectOutputStream(socket.getOutputStream());
             ois = new ObjectInputStream(socket.getInputStream());
 
+            // Adiciona este handler à lista de clientes ativos APENAS DEPOIS dos streams estarem prontos
+            logica.addClienteHandler(this);
+
             while (!socket.isClosed()) {
                 Mensagem msg = (Mensagem) ois.readObject();
 
@@ -50,12 +51,20 @@ public class ClienteHandler implements Runnable {
 
                         resposta = logica.processarLoginRegisto(msg);
 
+                        // Envia a resposta direta ao cliente que fez o pedido
+                        oos.writeObject(resposta);
+                        oos.flush();
+
                         if (resposta.getTipo() == Mensagem.Tipo.LOGIN_SUCESSO) {
                             this.autenticado = true;
                             socket.setSoTimeout(0); // Remover timeout após autenticação
                         }
 
-                        oos.writeObject(resposta);
+                        // Se o registo foi bem-sucedido, notifica os outros clientes
+                        if(resposta.getTipo() == Mensagem.Tipo.REGISTO_SUCESSO){
+                            logica.notificarClientes(new Mensagem(Mensagem.Tipo.NOTIFICACAO_ASSINCRONA, "Um novo utilizador foi registado."), this);
+                        }
+
                     } else {
                         // Não autenticado e a tentar fazer outra coisa
                         oos.writeObject(new Mensagem(Mensagem.Tipo.ERRO, "Não autenticado"));
@@ -64,11 +73,18 @@ public class ClienteHandler implements Runnable {
                     }
                 } else {
                     // Utilizador autenticado
+
                     if (msg.getTipo() == Mensagem.Tipo.LOGOUT) {
+                        System.out.println("Entrou logout");
                         this.autenticado = false;
                         oos.writeObject(new Mensagem(Mensagem.Tipo.OPERACAO_SUCESSO, "Logout com sucesso"));
+                        oos.flush();
                         socket.setSoTimeout(Configs.AUTH_TIMEOUT_MS); // Repor timeout
-                    } else {
+                    } else if (msg.getTipo() == Mensagem.Tipo.EXIT) {
+                        // O cliente está a desconectar-se
+                        break; // Sai do loop para fechar a ligação
+                    }
+                    else {
                         // Processar outras mensagens
                         resposta = logica.processarMensagem(msg); // TODO: Implementar em ServidorLogica
                         oos.writeObject(resposta);
