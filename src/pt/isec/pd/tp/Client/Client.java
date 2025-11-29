@@ -14,8 +14,8 @@ public class Client implements Serializable {
     }
 
     private int id;
-    private final String email;
-    private final String password;
+    private String email;
+    private String password;
     private Tipo tipo;
 
     public Client(String email, String password, Tipo tipo) {
@@ -43,8 +43,16 @@ public class Client implements Serializable {
         return email;
     }
 
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
     public String getPassword() {
         return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
     }
 
     public Tipo getTipo() { return tipo; }
