@@ -101,6 +101,32 @@ public class ClientVista {
         return input;
     }
 
+    public int lerIntObrigatoria(String prompt) {
+        String input;
+        int numero = 0;
+        boolean inputValido = false;
+
+        do {
+            System.out.print(prompt);
+            input = scanner.nextLine().trim();
+
+            if (input.isEmpty()) {
+                mostrarErro("Este campo é obrigatório e não pode ser vazio.");
+                // inputValido permanece false
+            } else {
+                try {
+                    numero = Integer.parseInt(input);
+                    inputValido = true;
+                } catch (NumberFormatException e) {
+                    mostrarErro("Introduza um número inteiro válido.");
+                    inputValido = false;
+                }
+            }
+        } while (!inputValido);
+
+        return numero;
+    }
+
     // Mostrar informações (erros, infos, avisos)
 
     public void mostrarErro(String msg) {
@@ -112,7 +138,7 @@ public class ClientVista {
     }
 
     public void mostrarAviso(String msg) {
-        System.out.println("AVISO: " + msg);
+        System.out.println(msg);
     }
 
     public void fecharScanner() {
