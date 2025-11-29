@@ -12,15 +12,20 @@ public class Mensagem implements Serializable {
         LOGIN,
         REGISTO_DOCENTE,
         REGISTO_ESTUDANTE,
+        EDITAR_PERFIL_ESTUDANTE,
+        EDITAR_PERFIL_DOCENTE,
         CRIAR_PERGUNTA,
+        VISUALIZAR_PERGUNTA,
         EDITAR_PERGUNTA,
         ELIMINAR_PERGUNTA,
         LISTAR_PERGUNTAS_DOCENTE,
         LISTAR_RESULTADOS_PERGUNTA,
         EXPORTAR_CSV,
-        ENTRAR_PERGUNTA_ESTUDANTE, // Submeter código da pergunta
+        OBTER_PERGUNTA, // Submeter código da pergunta
+        DETALHES_PERGUNTA_ESTUDANTE,
         SUBMETER_RESPOSTA,
         LISTAR_PERGUNTAS_RESPONDIDAS,
+        LISTA_PERGUNTAS_RESPONDIDAS,
         LOGOUT,
         EXIT,
 
