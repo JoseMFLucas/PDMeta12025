@@ -5,6 +5,8 @@ import pt.isec.pd.tp.Server.comunicacao.ClienteHandler;
 import pt.isec.pd.tp.Server.dados.DBManager;
 import pt.isec.pd.tp.Client.Client;
 import pt.isec.pd.tp.Utils.Mensagem;
+
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
@@ -34,34 +36,32 @@ public class ServidorLogica {
 
     public Mensagem processarLoginRegisto(Mensagem msg) {
 
-        if(msg.getTipo() == Mensagem.Tipo.LOGIN) {
-            String userType = dbManager.login((Client) msg.getPayload());
+        if (msg.getTipo() == Mensagem.Tipo.LOGIN) {
 
-            if (userType != null) {
-                return new Mensagem(Mensagem.Tipo.LOGIN_SUCESSO, userType);
+            Client clientToAuthenticate = (Client) msg.getPayload();
+
+            String tipoUser = dbManager.login(clientToAuthenticate);
+
+            if(tipoUser != null){
+                int idUser = dbManager.getUserId(clientToAuthenticate.getEmail(), tipoUser);
+
+                clientToAuthenticate.setTipo(Client.Tipo.valueOf(tipoUser));
+                clientToAuthenticate.setId(idUser);
+
+                System.out.println("Login bem-sucedido. ID: " + clientToAuthenticate.getId() + " Tipo: " + clientToAuthenticate.getTipo());
+
+                return new Mensagem(Mensagem.Tipo.LOGIN_SUCESSO, clientToAuthenticate);
             } else {
+                System.out.println("Login falhou");
                 return new Mensagem(Mensagem.Tipo.LOGIN_FALHOU, null);
             }
-
         }
         if(msg.getTipo() == Mensagem.Tipo.REGISTO_ESTUDANTE){
-            System.out.println("Registar Estudante");
-            String[] payload = (String[]) msg.getPayload();
-           if(dbManager.registarEstudante((String[]) msg.getPayload())){
-               notificarClientes(new Mensagem(Mensagem.Tipo.REGISTO_SUCESSO, "Novo Cliente foi registado.")); // Notificar atualização
-
-               System.out.println("Registo efetuado com sucesso.");
-
-               // Após o registo, tenta fazer o login automaticamente
-               String email = payload[1];
-               String password = payload[2];
-               String userType = dbManager.login(new Client(email, password, null));
-               System.out.println("Tipo de utilizador:" + userType);
-               if (userType != null) {
-                   return new Mensagem(Mensagem.Tipo.LOGIN_SUCESSO, userType);
-               } else {
-                   return new Mensagem(Mensagem.Tipo.LOGIN_FALHOU, "Login automático falhou após registo.");
-               }
+            if (!(msg.getPayload() instanceof String[])) {
+                return new Mensagem(Mensagem.Tipo.REGISTO_FALHOU, "Payload de registo inválido.");
+            }
+            if(dbManager.registarEstudante((String []) msg.getPayload())){
+                return new Mensagem(Mensagem.Tipo.REGISTO_SUCESSO, null);
             } else{
                 System.out.println("Registo falhou");
                 return new Mensagem(Mensagem.Tipo.REGISTO_FALHOU, null);
@@ -69,28 +69,18 @@ public class ServidorLogica {
         }
 
         if(msg.getTipo() == Mensagem.Tipo.REGISTO_DOCENTE){
-            System.out.println("Registar Docente");
-            String[] payload = (String[]) msg.getPayload();
+            if (!(msg.getPayload() instanceof String[])) {
+                return new Mensagem(Mensagem.Tipo.REGISTO_FALHOU, "Payload de registo inválido.");
+            }
+
             if(dbManager.registarDocente((String []) msg.getPayload())){
-                notificarClientes(new Mensagem(Mensagem.Tipo.REGISTO_SUCESSO, "Novo Docente foi registado.")); // Notificar atualização
-
-                System.out.println("Registo efetuado com sucesso.");
-
-                // Após o registo, tenta fazer o login automaticamente
-                String email = payload[1];
-                String password = payload[2];
-                String userType = dbManager.login(new Client(email, password, null));
-                System.out.println("Tipo de utilizador:" + userType);
-                if (userType != null) {
-                    return new Mensagem(Mensagem.Tipo.LOGIN_SUCESSO, userType);
-                } else {
-                    return new Mensagem(Mensagem.Tipo.LOGIN_FALHOU, "Login automático falhou após registo.");
-                }
+                return new Mensagem(Mensagem.Tipo.REGISTO_SUCESSO, null);
             } else{
                 System.out.println("Registo falhou");
                 return new Mensagem(Mensagem.Tipo.REGISTO_FALHOU, null);
             }
         }
+
         return new Mensagem(Mensagem.Tipo.EXIT, null);
     }
 
@@ -108,11 +98,7 @@ public class ServidorLogica {
             // Casos de Escrita (alteram BD)
             case CRIAR_PERGUNTA:
                 System.out.println("Criar pergunta");
-                // TODO: 1. Pedir iniciais dados da pergunta - pedir primeiro o enunciado, o número de opções, o período de disponibilidade (data/hora de início e de fim)
-                // 2. Pedir cada uma das opções
-                // 3. Pedir a opção correta
-                // TODO: 2. Chamar dbManager.criarPergunta( (Pergunta) msg.getPayload() )
-                // houveAlteracaoBD = dbManager.criarPergunta(...);
+                //houveAlteracaoBD = dbManager.criaPergunta(user, (String []) msg.getPayload());
                 break;
             case EDITAR_PERGUNTA:
                 // TODO: 1. Validar dados da pergunta
@@ -192,10 +178,21 @@ public class ServidorLogica {
     }
 
     // Notifica todos os clientes conectados
-    private void notificarClientes(Mensagem msg) {
+    public void notificarClientes(Mensagem msg) {
         synchronized (activeClients) {
             for (ClienteHandler handler : activeClients) {
                 handler.enviarNotificacao(msg);
+            }
+        }
+    }
+
+    // Notifica todos os clientes, exceto um
+    public void notificarClientes(Mensagem msg, ClienteHandler excluir) {
+        synchronized (activeClients) {
+            for (ClienteHandler handler : activeClients) {
+                if (handler != excluir) {
+                    handler.enviarNotificacao(msg);
+                }
             }
         }
     }
