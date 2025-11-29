@@ -155,6 +155,8 @@ public class ServidorDiretoriaMain {
             StringTokenizer tokenizer = new StringTokenizer(request, ";");
             String responseStr = MessageCodes.ERROR.toString();
 
+            System.out.println("Recebido pacote: " + request);
+
             if (request.startsWith("REGISTER")) {
                 String[] args = request.split(";");
                 if(args.length != 3) {
@@ -226,6 +228,16 @@ public class ServidorDiretoriaMain {
 
                     responseStr = "OK;" + principal.getIp().getHostAddress() + ";" + principal.getTcpPortClientes();
                 }
+
+                try(DatagramSocket socket = new DatagramSocket()){
+                    byte[] buffer = responseStr.getBytes();
+                    DatagramPacket responsePacket = new DatagramPacket(buffer, buffer.length, packet.getAddress(), packet.getPort());
+                    socket.send(responsePacket);
+                }
+                catch (Exception e) {
+                    System.out.println("Erro ao enviar unregister response: " + e.getMessage());
+                }
+
                 return;
             }
 
