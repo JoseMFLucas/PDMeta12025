@@ -49,7 +49,7 @@ public class ClienteHandler implements Runnable {
                     if (msg.getTipo() == Mensagem.Tipo.LOGIN || msg.getTipo() == Mensagem.Tipo.REGISTO_DOCENTE
                             || msg.getTipo() == Mensagem.Tipo.REGISTO_ESTUDANTE) {
 
-                        resposta = logica.processarLoginRegisto(msg);
+                        resposta = logica.processarLoginRegisto(msg, this);
 
                         // Envia a resposta direta ao cliente que fez o pedido
                         oos.writeObject(resposta);
@@ -86,7 +86,7 @@ public class ClienteHandler implements Runnable {
                     }
                     else {
                         // Processar outras mensagens
-                        resposta = logica.processarMensagem(msg); // TODO: Implementar em ServidorLogica
+                        resposta = logica.processarMensagem(msg, this); // TODO: Implementar em ServidorLogica
                         oos.writeObject(resposta);
                     }
                 }
