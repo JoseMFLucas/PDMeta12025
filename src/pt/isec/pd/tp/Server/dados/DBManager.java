@@ -123,8 +123,7 @@ public class DBManager {
                         "    opcao_escolhida_indice INTEGER NOT NULL," +
                         "    esta_certa BOOLEAN NOT NULL," +
                         "    PRIMARY KEY (idpergunta, numero_estudante)," +
-                        "    FOREIGN KEY (idpergunta) REFERENCES Pergunta(idpergunta)," +
-                        "    FOREIGN KEY (numero_estudante) REFERENCES Estudante(numero_estudante)" +
+                        "    FOREIGN KEY (idpergunta) REFERENCES Pergunta(idpergunta)" +
                         ");" +
 
                         "INSERT INTO Configuracao (codigoregisto, versao)" +
@@ -197,8 +196,9 @@ public class DBManager {
         if (conn == null) {
             return -1;
         }
-        String idColumn = userType.equals("DOCENTE") ? "iddocente" : "idestudante";
-        String sql = "SELECT " + idColumn + " FROM " + userType + " WHERE email = ?";
+        String idColumn = userType.equals("DOCENTE") ? "iddocente" : "numero_estudante";
+        String tableName = userType.equals("DOCENTE") ? "Docente" : "Estudante";
+        String sql = "SELECT " + idColumn + " FROM " + tableName + " WHERE email = ?";
 
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, email);
@@ -480,14 +480,14 @@ public class DBManager {
             // 3. Inserir as novas opções
             String[] novasOpcoes = opcoesString.substring(1, opcoesString.length() - 1).split(", ");
             String sqlInsertOpcao = "INSERT INTO Opcao (idpergunta, indice, texto) VALUES (?, ?, ?)";
-            try (PreparedStatement pstmt = conn.prepareStatement(sqlInsertOpcao)) {
+            try (PreparedStatement pstmtOpcao = conn.prepareStatement(sqlInsertOpcao)) {
                 for (int i = 0; i < novasOpcoes.length; i++) {
-                    pstmt.setInt(1, idPergunta);
-                    pstmt.setInt(2, i + 1);
-                    pstmt.setString(3, novasOpcoes[i]);
-                    pstmt.addBatch();
+                    pstmtOpcao.setInt(1, idPergunta);
+                    pstmtOpcao.setInt(2, i + 1);
+                    pstmtOpcao.setString(3, novasOpcoes[i]);
+                    pstmtOpcao.addBatch();
                 }
-                pstmt.executeBatch();
+                pstmtOpcao.executeBatch();
             }
 
             conn.commit(); // Confirma a transação
@@ -653,13 +653,49 @@ public class DBManager {
 
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) {
-                    String[] pergunta = {
-                            String.valueOf(rs.getInt("idpergunta")),
-                            rs.getString("enunciado"),
-                            rs.getString("codigo_acesso"),
-                            rs.getString("data_hora_inicio"),
-                            rs.getString("data_hora_fim")
-                    };
+                    int idPergunta = rs.getInt("idpergunta");
+                    String[] pergunta;
+
+                    if (filtro.equalsIgnoreCase("expiradas")) {
+                        String sqlStats = "SELECT COUNT(*) as total_respostas, SUM(CASE WHEN esta_certa = 1 THEN 1 ELSE 0 END) as respostas_certas FROM Resposta WHERE idpergunta = ?";
+                        try (PreparedStatement pstmtStats = conn.prepareStatement(sqlStats)) {
+                            pstmtStats.setInt(1, idPergunta);
+                            try (ResultSet rsStats = pstmtStats.executeQuery()) {
+                                if (rsStats.next()) {
+                                    int totalRespostas = rsStats.getInt("total_respostas");
+                                    int respostasCertas = rsStats.getInt("respostas_certas");
+                                    double percentagem = (totalRespostas > 0) ? ((double) respostasCertas / totalRespostas) * 100 : 0;
+                                    pergunta = new String[]{
+                                            String.valueOf(idPergunta),
+                                            rs.getString("enunciado"),
+                                            rs.getString("codigo_acesso"),
+                                            rs.getString("data_hora_inicio"),
+                                            rs.getString("data_hora_fim"),
+                                            String.valueOf(totalRespostas),
+                                            String.format("%.2f%%", percentagem)
+                                    };
+                                } else {
+                                    pergunta = new String[]{
+                                            String.valueOf(idPergunta),
+                                            rs.getString("enunciado"),
+                                            rs.getString("codigo_acesso"),
+                                            rs.getString("data_hora_inicio"),
+                                            rs.getString("data_hora_fim"),
+                                            "0",
+                                            "0.00%"
+                                    };
+                                }
+                            }
+                        }
+                    } else {
+                        pergunta = new String[]{
+                                String.valueOf(idPergunta),
+                                rs.getString("enunciado"),
+                                rs.getString("codigo_acesso"),
+                                rs.getString("data_hora_inicio"),
+                                rs.getString("data_hora_fim")
+                        };
+                    }
                     perguntas.add(pergunta);
                 }
             }
@@ -671,6 +707,85 @@ public class DBManager {
         return perguntas;
     }
 
+    public List<String[]> getEstatisticasPerguntaExpirada(int id_pergunta) {
+        if (conn == null) {
+            return null;
+        }
+
+        List<String[]> resultado = new ArrayList<>();
+        String sqlPergunta = "SELECT p.enunciado, p.data_hora_fim, p.opcao_correta_indice, GROUP_CONCAT(o.texto, ';') as opcoes " +
+                "FROM Pergunta p JOIN Opcao o ON p.idpergunta = o.idpergunta " +
+                "WHERE p.idpergunta = ? " +
+                "GROUP BY p.idpergunta";
+
+        String sqlRespostas = "SELECT e.numero_estudante, e.nome, e.email, r.opcao_escolhida_indice, r.data_hora_realizacao, o.texto as resposta_texto " +
+                "FROM Resposta r " +
+                "JOIN Estudante e ON r.numero_estudante = e.numero_estudante " +
+                "JOIN Opcao o ON r.idpergunta = o.idpergunta AND r.opcao_escolhida_indice = o.indice " +
+                "WHERE r.idpergunta = ?";
+
+        try {
+            // 1. Obter detalhes da pergunta
+            try (PreparedStatement pstmt = conn.prepareStatement(sqlPergunta)) {
+                pstmt.setInt(1, id_pergunta);
+                try (ResultSet rs = pstmt.executeQuery()) {
+                    if (rs.next()) {
+                        String[] detalhesPergunta = {
+                                rs.getString("enunciado"),
+                                rs.getString("data_hora_fim"),
+                                rs.getString("opcoes"),
+                                String.valueOf(rs.getInt("opcao_correta_indice"))
+                        };
+                        resultado.add(detalhesPergunta);
+                    } else {
+                        return null; // Pergunta não encontrada
+                    }
+                }
+            }
+
+            // 2. Obter respostas dos estudantes e calcular estatísticas
+            int totalRespostas = 0;
+            int respostasCertas = 0;
+            List<String[]> respostasAlunos = new ArrayList<>();
+
+            try (PreparedStatement pstmt = conn.prepareStatement(sqlRespostas)) {
+                pstmt.setInt(1, id_pergunta);
+                try (ResultSet rs = pstmt.executeQuery()) {
+                    int opcaoCorreta = Integer.parseInt(resultado.get(0)[3]);
+                    while (rs.next()) {
+                        totalRespostas++;
+                        int opcaoEscolhida = rs.getInt("opcao_escolhida_indice");
+                        if (opcaoEscolhida == opcaoCorreta) {
+                            respostasCertas++;
+                        }
+                        String[] respostaAluno = {
+                                String.valueOf(rs.getInt("numero_estudante")),
+                                rs.getString("nome"),
+                                rs.getString("email"),
+                                rs.getString("resposta_texto"),
+                                rs.getString("data_hora_realizacao")
+                        };
+                        respostasAlunos.add(respostaAluno);
+                    }
+                }
+            }
+
+            // 3. Adicionar estatísticas
+            double percentagemCertas = (totalRespostas > 0) ? ((double) respostasCertas / totalRespostas) * 100 : 0;
+            resultado.add(new String[]{String.format("%.2f%%", percentagemCertas)});
+
+            // 4. Adicionar respostas dos alunos
+            resultado.addAll(respostasAlunos);
+
+        } catch (SQLException e) {
+            System.err.println("Erro ao obter estatísticas da pergunta: " + e.getMessage());
+            return null;
+        }
+
+        return resultado;
+    }
+
+
     public List<String[]> listarPerguntasRespondidas(int idEstudante) {
         if (conn == null) {
             return null;
@@ -680,7 +795,7 @@ public class DBManager {
         String sql = "SELECT p.enunciado, r.data_hora_realizacao, r.opcao_escolhida_indice, r.esta_certa " +
                      "FROM Resposta r " +
                      "JOIN Pergunta p ON r.idpergunta = p.idpergunta " +
-                     "WHERE r.idestudante = ? " +
+                     "WHERE r.numero_estudante = ? " +
                      "ORDER BY r.data_hora_realizacao DESC";
 
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -748,24 +863,50 @@ public class DBManager {
     public boolean submeterResposta(int idEstudante, int idPergunta, int opcaoEscolhida) {
         if (conn == null) return false;
 
-        String sqlGetRespostaCorreta = "SELECT opcao_correta_indice FROM Pergunta WHERE idpergunta = ?";
-        String sqlInsertResposta = "INSERT INTO Resposta (idpergunta, idestudante, data_hora_realizacao, opcao_escolhida_indice, esta_certa) VALUES (?, ?, ?, ?, ?)";
+        String sqlCheckRespostaExistente = "SELECT COUNT(*) FROM Resposta WHERE idpergunta = ? AND numero_estudante = ?";
+        String sqlGetPerguntaStatus = "SELECT opcao_correta_indice, data_hora_inicio, data_hora_fim FROM Pergunta WHERE idpergunta = ?";
+        String sqlInsertResposta = "INSERT INTO Resposta (idpergunta, numero_estudante, data_hora_realizacao, opcao_escolhida_indice, esta_certa) VALUES (?, ?, ?, ?, ?)";
 
         try {
+            // 1. Verificar se o estudante já respondeu a esta pergunta
+            try (PreparedStatement pstmtCheck = conn.prepareStatement(sqlCheckRespostaExistente)) {
+                pstmtCheck.setInt(1, idPergunta);
+                pstmtCheck.setInt(2, idEstudante);
+                try (ResultSet rsCheck = pstmtCheck.executeQuery()) {
+                    if (rsCheck.next() && rsCheck.getInt(1) > 0) {
+                        System.err.println("Erro: Estudante já respondeu a esta pergunta.");
+                        return false; // Estudante já respondeu
+                    }
+                }
+            }
+
+            // 2. Obter detalhes da pergunta e verificar se está ativa
             int opcaoCorreta;
-            try (PreparedStatement pstmt = conn.prepareStatement(sqlGetRespostaCorreta)) {
+            LocalDateTime dataHoraInicio;
+            LocalDateTime dataHoraFim;
+            try (PreparedStatement pstmt = conn.prepareStatement(sqlGetPerguntaStatus)) {
                 pstmt.setInt(1, idPergunta);
                 try (ResultSet rs = pstmt.executeQuery()) {
                     if (rs.next()) {
                         opcaoCorreta = rs.getInt("opcao_correta_indice");
+                        dataHoraInicio = LocalDateTime.parse(rs.getString("data_hora_inicio"), DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm"));
+                        dataHoraFim = LocalDateTime.parse(rs.getString("data_hora_fim"), DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm"));
                     } else {
+                        System.err.println("Erro: Pergunta não existe.");
                         return false; // Pergunta não existe
                     }
                 }
             }
 
+            LocalDateTime agora = LocalDateTime.now();
+            if (agora.isBefore(dataHoraInicio) || agora.isAfter(dataHoraFim)) {
+                System.err.println("Erro: A pergunta não está ativa no momento.");
+                return false; // Pergunta não está ativa
+            }
+
+            // 3. Inserir a resposta
             boolean estaCerta = (opcaoEscolhida == opcaoCorreta);
-            String dataHoraAtual = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            String dataHoraAtual = agora.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
 
             try (PreparedStatement pstmt = conn.prepareStatement(sqlInsertResposta)) {
                 pstmt.setInt(1, idPergunta);
@@ -793,11 +934,15 @@ public class DBManager {
         String campo = dadosEdicao[1];
         String novoValor = dadosEdicao[2];
 
-        String sqlUpdate = "UPDATE Estudante SET " + campo + " = ? WHERE idestudante = ?";
+        String sqlUpdate = "UPDATE Estudante SET " + campo + " = ? WHERE numero_estudante = ?";
 
         try {
             try (PreparedStatement pstmt = conn.prepareStatement(sqlUpdate)) {
-                pstmt.setString(1, novoValor);
+                if (campo.equals("numero_estudante")) {
+                    pstmt.setInt(1, Integer.parseInt(novoValor));
+                } else {
+                    pstmt.setString(1, novoValor);
+                }
                 pstmt.setInt(2, idEstudante);
                 int linhasAfetadas = pstmt.executeUpdate();
                 return linhasAfetadas > 0;
