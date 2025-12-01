@@ -155,7 +155,6 @@ public class ServidorDiretoriaMain {
             StringTokenizer tokenizer = new StringTokenizer(request, ";");
             String responseStr = MessageCodes.ERROR.toString();
 
-            System.out.println("Recebido pacote: " + request);
 
             if (request.startsWith("REGISTER")) {
                 String[] args = request.split(";");
@@ -202,43 +201,14 @@ public class ServidorDiretoriaMain {
 
             }
             if (request.startsWith("UNREGISTER")) {
-                // Encontrar e remover o servidor da lista
-                if(activeServers.removeIf(server -> server.equals(packet)))
-                {
-                    responseStr = "OK;Servidor removido";
-                    try(DatagramSocket socket = new DatagramSocket()){
-                        byte[] buffer = responseStr.getBytes();
-                        DatagramPacket responsePacket = new DatagramPacket(buffer, buffer.length, packet.getAddress(), packet.getPort());
-                        socket.send(responsePacket);
+                for (ServerInfo server : activeServers) {
+                    if(activeServers.remove(server))
+                    {
+                        System.out.println("Servidor: " + packet.getAddress() + " removido com sucesso.");
                     }
-                    catch (Exception e) {
-                        System.out.println("Erro ao enviar unregister response: " + e.getMessage());
-                    }
-                }
-                return;
-            }
-            if (request.startsWith("REQUEST_SERVER")) {
-                // Pedido do Cliente para obter o Servidor Principal
 
-                if (activeServers.isEmpty()) {
-                    responseStr = "ERROR;Nenhum servidor ativo.";
-                } else {
-                    // Vai buscar o servidor principal e mete a resposta no formato OK;IP_SERVIDOR;PORTO_TCP_CLIENTES
-                    ServerInfo principal = activeServers.getFirst();
-
-                    responseStr = "OK;" + principal.getIp().getHostAddress() + ";" + principal.getTcpPortClientes();
+                    return;
                 }
-
-                try(DatagramSocket socket = new DatagramSocket()){
-                    byte[] buffer = responseStr.getBytes();
-                    DatagramPacket responsePacket = new DatagramPacket(buffer, buffer.length, packet.getAddress(), packet.getPort());
-                    socket.send(responsePacket);
-                }
-                catch (Exception e) {
-                    System.out.println("Erro ao enviar unregister response: " + e.getMessage());
-                }
-
-                return;
             }
 
             // Enviar resposta

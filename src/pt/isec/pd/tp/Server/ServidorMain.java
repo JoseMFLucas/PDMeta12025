@@ -9,6 +9,7 @@ import pt.isec.pd.tp.Utils.MessageCodes;
 
 import java.io.*;
 import java.net.*;
+import java.util.Scanner;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -39,6 +40,8 @@ public class ServidorMain {
 
     ScheduledExecutorService heartbeat;
     ScheduledExecutorService multicastSpeaker;
+
+    Scanner scanner;
 
     public void start() {
         try {
@@ -110,6 +113,13 @@ public class ServidorMain {
 
             multicastSpeaker = Executors.newSingleThreadScheduledExecutor();
             multicastSpeaker.scheduleAtFixedRate( new MulticastSpeaker(logica, multicastIp, running), Configs.HEARTBEAT_INTERVAL_MS, Configs.HEARTBEAT_INTERVAL_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
+            scanner = new Scanner(System.in);
+            while (running) {
+                System.out.println("Servidor a correr pressione Enter para encerrar o servidor...");
+                scanner.nextLine();
+                stop();
+
+            }
 
         } catch (Exception e) {
             System.out.println("Erro ao iniciar Servidor: " + e.getMessage());
@@ -193,6 +203,20 @@ public class ServidorMain {
 
     public void stop() {
         System.out.println("A encerrar o servidor...");
+
+        try(DatagramSocket udpsocket = new DatagramSocket()) {
+            udpsocket.setSoTimeout(Configs.SERVER_TIMEOUT_MS);
+
+            String mensagem = "UNREGISTER";
+            byte[] buffer = mensagem.getBytes();
+
+
+            DatagramPacket packet = new DatagramPacket(buffer, buffer.length, InetAddress.getByName(diretoriaIp), diretoriaPort);
+            udpsocket.send(packet);
+        }
+        catch (Exception e) {
+            System.err.println("Erro ao notificar o Serviço de Diretoria sobre o encerramento: " + e.getMessage());
+        }
         if (dbSyncSender != null) {
             dbSyncSender.stop();
         }
@@ -210,6 +234,8 @@ public class ServidorMain {
             heartbeat.shutdownNow();
         setPrincipal(false);
         running = false;
+        if(scanner != null)
+            scanner.close();
     }
 
 
