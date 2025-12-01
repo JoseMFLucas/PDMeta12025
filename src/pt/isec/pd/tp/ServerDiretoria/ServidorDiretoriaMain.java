@@ -228,7 +228,7 @@ public class ServidorDiretoriaMain {
                     socket.send(responsePacket);
                 }
                 catch (Exception e) {
-                    System.out.println("Erro ao enviar unregister response: " + e.getMessage());
+                    System.out.println("Erro ao enviar request server response: " + e.getMessage());
                 }
 
                 return;
