@@ -151,6 +151,12 @@ public class ServidorLogica {
                     return new Mensagem(Mensagem.Tipo.LISTA_PERGUNTAS, perguntas);
                 }
                 break;
+            case VER_ESTATISTICAS:
+                List<String[]> estatisticas = dbManager.getEstatisticasPerguntaExpirada((int) msg.getPayload());
+                if (estatisticas != null) {
+                    return new Mensagem(Mensagem.Tipo.ESTATISTICAS_PERGUNTA, estatisticas);
+                }
+                break;
             case LISTAR_RESULTADOS_PERGUNTA:
                 // TODO
                 break;
