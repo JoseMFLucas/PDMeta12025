@@ -5,6 +5,7 @@ import pt.isec.pd.tp.Client.Comunicacao.ClientListener;
 import pt.isec.pd.tp.Client.Vista.ClientVista;
 import pt.isec.pd.tp.Utils.Mensagem;
 
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -71,7 +72,7 @@ public class ClientMain {
                         password = vista.lerStringObrigatoria("Password: ");
                         vista.mostrarInfo("Iniciar o login com email: " + email + " e password: " + password);
                         try {
-                            user = new Client(email, password, null);
+                            user = new Client(0, email, password, null);
                             Mensagem msg = new Mensagem(Mensagem.Tipo.LOGIN, user);
                             out.writeObject(msg);
                             out.flush();
@@ -159,6 +160,7 @@ public class ClientMain {
                                         if (response != null && response.getTipo() == Mensagem.Tipo.LOGIN_SUCESSO) {
                                             Client autenticateduser = (Client) response.getPayload();
                                             this.user = autenticateduser;
+                                            user.setId(numero);
                                             autenticated = true;
                                         } else {
                                             vista.mostrarErro("Login automático falhou.");
@@ -354,7 +356,7 @@ public class ClientMain {
                                                 perguntas.add((String[]) item);
                                             }
                                         }
-                                        vista.mostrarListaPerguntas(perguntas);
+                                        vista.mostrarListaPerguntas(perguntas, filtro);
                                     }
                                 } else {
                                     vista.mostrarErro("Erro ao listar as perguntas.");
@@ -364,6 +366,75 @@ public class ClientMain {
                             }
                             break;
                         case 5:
+                            vista.mostrarInfo("Introduza o ID da pergunta expirada para ver as estatísticas:");
+                            int idPerguntaStats = vista.lerIntObrigatoria("ID da pergunta: ");
+                            try {
+                                Mensagem msg = new Mensagem(Mensagem.Tipo.VER_ESTATISTICAS, idPerguntaStats);
+                                out.writeObject(msg);
+                                out.flush();
+
+                                Mensagem response = listener.getResponse();
+                                if (response != null && response.getTipo() == Mensagem.Tipo.ESTATISTICAS_PERGUNTA) {
+                                    if (response.getPayload() instanceof List) {
+                                        List<?> rawList = (List<?>) response.getPayload();
+                                        List<String[]> estatisticas = new ArrayList<>();
+                                        for (Object item : rawList) {
+                                            if (item instanceof String[]) {
+                                                estatisticas.add((String[]) item);
+                                            }
+                                        }
+                                        vista.mostrarEstatisticasPergunta(estatisticas);
+                                    }
+                                } else {
+                                    vista.mostrarErro("Erro ao obter as estatísticas da pergunta.");
+                                }
+                            } catch (IOException | InterruptedException e) {
+                                vista.mostrarErro("Erro durante a comunicação: " + e.getMessage());
+                            }
+                            break;
+                        case 6:
+                            vista.mostrarInfo("Introduza o ID da pergunta expirada para exportar os resultados para CSV:");
+                            int idPerguntaExport = vista.lerIntObrigatoria("ID da pergunta: ");
+                            try {
+                                // Request 1: Get question details
+                                Mensagem msgDetalhes = new Mensagem(Mensagem.Tipo.VISUALIZAR_PERGUNTA, idPerguntaExport);
+                                out.writeObject(msgDetalhes);
+                                out.flush();
+                                Mensagem responseDetalhes = listener.getResponse();
+
+                                if (responseDetalhes != null && responseDetalhes.getTipo() == Mensagem.Tipo.DETALHES_PERGUNTA) {
+                                    String[] detalhesPergunta = (String[]) responseDetalhes.getPayload();
+
+                                    // Request 2: Get statistics (student answers)
+                                    Mensagem msgStats = new Mensagem(Mensagem.Tipo.VER_ESTATISTICAS, idPerguntaExport);
+                                    out.writeObject(msgStats);
+                                    out.flush();
+                                    Mensagem responseStats = listener.getResponse();
+
+                                    if (responseStats != null && responseStats.getTipo() == Mensagem.Tipo.ESTATISTICAS_PERGUNTA) {
+                                        if (responseStats.getPayload() instanceof List) {
+                                            List<?> rawList = (List<?>) responseStats.getPayload();
+                                            List<String[]> estatisticas = new ArrayList<>();
+                                            for (Object item : rawList) {
+                                                if (item instanceof String[]) {
+                                                    estatisticas.add((String[]) item);
+                                                }
+                                            }
+                                            exportarResultadosParaCSV(detalhesPergunta, estatisticas);
+                                        } else {
+                                            vista.mostrarErro("Formato de dados de estatísticas inválido.");
+                                        }
+                                    } else {
+                                        vista.mostrarErro("Não foi possível obter as respostas dos alunos para esta pergunta. A pergunta pode não ter expirado ou não ter respostas.");
+                                    }
+                                } else {
+                                    vista.mostrarErro("Não foi possível obter os detalhes da pergunta. Verifique o ID.");
+                                }
+                            } catch (IOException | InterruptedException e) {
+                                vista.mostrarErro("Erro durante a comunicação para exportação de CSV: " + e.getMessage());
+                            }
+                            break;
+                        case 7:
                             vista.mostrarInfo("O que deseja editar no seu perfil?");
                             vista.mostrarInfo("1. Nome");
                             vista.mostrarInfo("2. Email");
@@ -590,6 +661,67 @@ public class ClientMain {
         // Finalização
         closeResources();
     }
+
+    private void exportarResultadosParaCSV(String[] detalhes, List<String[]> estatisticas) {
+        String filename = vista.lerStringObrigatoria("Introduza o nome do ficheiro CSV (ex: resultados.csv): ");
+        if (!filename.toLowerCase().endsWith(".csv")) {
+            filename += ".csv";
+        }
+
+        try (FileWriter writer = new FileWriter(filename)) {
+            // Detalhes da Pergunta: {id, idDocente, enunciado, opcoes, dataInicio, dataFim, opcaoCorreta_idx, codigoAcesso}
+            String enunciado = detalhes[2];
+            String opcoesStr = detalhes[3];
+            String dataInicio = detalhes[4]; // "YYYY/MM/DD HH:MM"
+            String dataFim = detalhes[5];   // "YYYY/MM/DD HH:MM"
+            int opcaoCorretaIdx = Integer.parseInt(detalhes[6]);
+
+            String[] inicioParts = dataInicio.split(" ");
+            String[] fimParts = dataFim.split(" ");
+            String[] dataParts = inicioParts[0].split("/");
+            String dia = dataParts[2] + "-" + dataParts[1] + "-" + dataParts[0]; // DD-MM-YYYY
+            String horaInicial = inicioParts[1];
+            String horaFinal = fimParts[1];
+            char opcaoCorretaLetra = (char) ('a' + opcaoCorretaIdx);
+
+            // Linha 1: Cabeçalho e detalhes da pergunta
+            writer.append("\"dia\";\"hora inicial\";\"hora final\";\"enunciado da pergunta\";\"opção certa\"\n");
+            writer.append(String.format("\"%s\";\"%s\";\"%s\";\"%s\";\"%c\"\n", dia, horaInicial, horaFinal, enunciado, opcaoCorretaLetra));
+
+            // Linha 2: Cabeçalho das opções
+            writer.append("\"opção\";\"texto da opção\"\n");
+
+            // Opções
+            String[] opcoes = opcoesStr.substring(1, opcoesStr.length() - 1).split(", ");
+            for (int i = 0; i < opcoes.length; i++) {
+                char letraOpcao = (char) ('a' + i);
+                writer.append(String.format("\"%c\";\"%s\"\n", letraOpcao, opcoes[i]));
+            }
+
+            // Linha 3: Cabeçalho das respostas
+            writer.append("\"número de estudante\";\"nome\";\"e-mail\";\"resposta\"\n");
+
+            // Respostas dos alunos
+            // estatisticas: get(0) e get(1) são info geral, respostas começam no índice 2
+            for (int i = 2; i < estatisticas.size(); i++) {
+                String[] resposta = estatisticas.get(i);
+                // Formato: {numero, nome, email, resposta_idx, data/hora}
+                String numEstudante = resposta[0];
+                String nomeEstudante = resposta[1];
+                String emailEstudante = resposta[2];
+                String respostaLetra = resposta[3];
+                writer.append(String.format("\"%s\";\"%s\";\"%s\";\"%s\"\n", numEstudante, nomeEstudante, emailEstudante, respostaLetra));
+            }
+
+            vista.mostrarInfo("Resultados exportados com sucesso para " + filename);
+
+        } catch (IOException e) {
+            vista.mostrarErro("Ocorreu um erro ao escrever o ficheiro CSV: " + e.getMessage());
+        } catch (Exception e) {
+            vista.mostrarErro("Ocorreu um erro inesperado durante a exportação para CSV: " + e.getMessage());
+        }
+    }
+
 
     // Fecha o socket TCP e o scanner da Vista.
 
