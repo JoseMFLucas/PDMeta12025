@@ -5,6 +5,7 @@ import javafx.fxml.FXMLLoader;
 import javafx.scene.Node;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.StackPane;
+import javafx.stage.Stage;
 import pt.isec.pd.tp.Client.logica.ClientManager;
 import pt.isec.pd.tp.Client.logica.ClientState;
 import pt.isec.pd.tp.Client.ui.gui.vistas.*;
@@ -55,10 +56,16 @@ public class MainPane extends StackPane {
     }
 
     private void registerHandlers() {
-        // This listener will now trigger on ANY property change from the manager
         clientManager.addPropertyChangeListener(evt -> {
-            // Ensure UI updates are run on the JavaFX Application Thread
-            Platform.runLater(this::update);
+            Platform.runLater(() -> {
+                if (evt.getPropertyName().equals(ClientManager.PROP_STATE)) {
+                    update();
+                } else if (evt.getPropertyName().equals(ClientManager.PROP_CLOSE_APP)) {
+                    // Get the stage and close it
+                    Stage stage = (Stage) this.getScene().getWindow();
+                    stage.close();
+                }
+            });
         });
     }
 

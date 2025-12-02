@@ -19,6 +19,7 @@ public class ClientManager {
     public static final String PROP_CLIENTES = "clientes";
     public static final String PROP_PERGUNTAS = "perguntas";
     public static final String PROP_PERGUNTA_ENCONTRADA = "pergunta_encontrada";
+    public static final String PROP_CLOSE_APP = "close_app"; // New property
 
     private ClientState state;
     private final PropertyChangeSupport pcs;
@@ -53,11 +54,14 @@ public class ClientManager {
                     }
                 } catch (Exception e) {
                     System.err.println("Ligação perdida: " + e.getMessage());
+                    // Use the existing pcs object to fire the close event
+                    pcs.firePropertyChange(PROP_CLOSE_APP, false, true);
                 }
             });
             listenerThread.start();
         } catch (IOException e) {
             pcs.firePropertyChange(PROP_MSG, null, "Erro de conexão: " + e.getMessage());
+            pcs.firePropertyChange(PROP_CLOSE_APP, false, true); // Also close if connection fails on start
         }
     }
 
@@ -94,13 +98,11 @@ public class ClientManager {
     }
 
     public void login(String email, String password) {
-        // Server expects a Client object for login
         Client client = new Client(email, password, null);
         enviarMensagem(new Mensagem(Mensagem.Tipo.LOGIN, client));
     }
 
     public void registar(Client cliente) {
-        // Server expects a Client object for registration
         Mensagem.Tipo tipo = cliente.getTipo() == Client.Tipo.DOCENTE ? Mensagem.Tipo.REGISTO_DOCENTE : Mensagem.Tipo.REGISTO_ESTUDANTE;
         enviarMensagem(new Mensagem(tipo, cliente));
     }
@@ -133,8 +135,8 @@ public class ClientManager {
     }
 
     public void logout() {
-        this.user = null;
-        setState(ClientState.LOGIN);
+        // Fire the close event on logout
+        pcs.firePropertyChange(PROP_CLOSE_APP, false, true);
     }
 
     private void enviarMensagem(Mensagem m) {
