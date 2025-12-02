@@ -61,7 +61,6 @@ public class MainPane extends StackPane {
                 if (evt.getPropertyName().equals(ClientManager.PROP_STATE)) {
                     update();
                 } else if (evt.getPropertyName().equals(ClientManager.PROP_CLOSE_APP)) {
-                    // Get the stage and close it
                     Stage stage = (Stage) this.getScene().getWindow();
                     stage.close();
                 }
