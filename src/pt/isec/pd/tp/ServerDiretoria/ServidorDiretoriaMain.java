@@ -125,7 +125,8 @@ public class ServidorDiretoriaMain {
             try {
                 String [] args = responseStr.split(";");
                 activeServers.sort(Comparator.comparingLong(ServerInfo::getRegistrationTime));
-                if(activeServers.getFirst().equals(server))
+
+                if(!activeServers.isEmpty() && activeServers.get(0).equals(server))
                     responseStr = "HEARTBEAT;PRINCIPAL";
                 else
                     responseStr = "HEARTBEAT;" + server.getIp().getHostAddress() + ";" + server.getPort();
@@ -155,7 +156,6 @@ public class ServidorDiretoriaMain {
             StringTokenizer tokenizer = new StringTokenizer(request, ";");
             String responseStr = MessageCodes.ERROR.toString();
 
-            System.out.println("Recebido pacote: " + request);
 
             if (request.startsWith("REGISTER")) {
                 String[] args = request.split(";");
@@ -173,7 +173,7 @@ public class ServidorDiretoriaMain {
                 activeServers.add(novoServer);
                 activeServers.sort(Comparator.comparingLong(ServerInfo::getRegistrationTime));
 
-                ServerInfo principal = activeServers.getFirst();
+                ServerInfo principal = activeServers.get(0);
 
                 responseStr = "OK;" + principal.getIp().getHostAddress() + ";"
                         + principal.getTcpPortClientes() + ";"
@@ -217,7 +217,7 @@ public class ServidorDiretoriaMain {
                 if (activeServers.isEmpty()) {
                     responseStr = "ERROR;Nenhum servidor ativo.";
                 } else {
-                    ServerInfo principal = activeServers.getFirst();
+                    ServerInfo principal = activeServers.get(0);
 
                     responseStr = "OK;" + principal.getIp().getHostAddress() + ";" + principal.getTcpPortClientes();
                 }
@@ -228,7 +228,7 @@ public class ServidorDiretoriaMain {
                     socket.send(responsePacket);
                 }
                 catch (Exception e) {
-                    System.out.println("Erro ao enviar unregister response: " + e.getMessage());
+                    System.out.println("Erro ao enviar request server response: " + e.getMessage());
                 }
 
                 return;

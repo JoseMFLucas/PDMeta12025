@@ -14,14 +14,17 @@ public class Client implements Serializable {
     }
 
     private int id;
+    private String nome;
     private String email;
     private String password;
     private Tipo tipo;
+    private int numero;
+    private String codigoRegisto;
 
-    public Client(String email, String password, Tipo tipo) {
+    public Client(String email, String password, String nome) {
         this.email = email;
         this.password = password;
-        this.tipo = tipo;
+        this.nome = nome;
     }
 
     public Client(int id, String email, String password, Tipo tipo) {
@@ -37,6 +40,14 @@ public class Client implements Serializable {
 
     public void setId(int id) {
         this.id = id;
+    }
+
+    public String getNome() {
+        return nome;
+    }
+
+    public void setNome(String nome) {
+        this.nome = nome;
     }
 
     public String getEmail() {
@@ -61,15 +72,32 @@ public class Client implements Serializable {
         this.tipo = tipo;
     }
 
-    // Inside the pt.isec.pd.tp.Utils.Client class
+    public int getNumero() {
+        return numero;
+    }
+
+    public void setNumero(int numero) {
+        this.numero = numero;
+    }
+
+    public String getCodigoRegisto() {
+        return codigoRegisto;
+    }
+
+    public void setCodigoRegisto(String codigoRegisto) {
+        this.codigoRegisto = codigoRegisto;
+    }
 
     @Override
     public String toString() {
         return "Client{" +
                 "id=" + id +
+                ", nome='" + nome + '\'' +
                 ", email='" + email + '\'' +
                 ", password='" + password + '\'' +
                 ", tipo=" + tipo +
+                ", numero=" + numero +
+                ", codigoRegisto='" + codigoRegisto + '\'' +
                 '}';
     }
 }

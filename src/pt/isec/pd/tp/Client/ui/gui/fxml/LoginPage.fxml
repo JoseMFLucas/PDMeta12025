@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.PasswordField?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox alignment="CENTER" spacing="10.0" xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1" fx:controller="pt.isec.pd.tp.Client.ui.gui.vistas.LoginPage">
+    <padding>
+        <Insets bottom="20.0" left="20.0" right="20.0" top="20.0" />
+    </padding>
+
+    <Label text="Login PD" />
+    <TextField fx:id="txtEmail" promptText="Email" />
+    <PasswordField fx:id="txtPass" promptText="Password" />
+    <Button fx:id="btnLogin" onAction="#onLogin" text="Entrar" />
+    <Button fx:id="btnRegistar" onAction="#onRegister" text="Ainda não tem conta? Registar" />
+</VBox>

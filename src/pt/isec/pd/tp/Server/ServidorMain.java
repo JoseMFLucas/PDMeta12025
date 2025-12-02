@@ -118,7 +118,6 @@ public class ServidorMain {
                 System.out.println("Servidor a correr pressione Enter para encerrar o servidor...");
                 scanner.nextLine();
                 stop();
-
             }
 
         } catch (Exception e) {
@@ -236,6 +235,7 @@ public class ServidorMain {
         running = false;
         if(scanner != null)
             scanner.close();
+        System.out.println("Servidor terminado clique Enter para o finalizar.");
     }
 
 
