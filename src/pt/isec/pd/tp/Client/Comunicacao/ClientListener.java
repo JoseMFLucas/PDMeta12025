@@ -28,8 +28,11 @@ public class ClientListener implements Runnable {
     }
 
     public Mensagem getResponse() throws InterruptedException {
-        // Usa um timeout para evitar que o cliente fique bloqueado indefinidamente
-        return responseQueue.poll(15, TimeUnit.SECONDS);
+        return getResponse(60);
+    }
+
+    public Mensagem getResponse(long timeoutSeconds) throws InterruptedException {
+        return responseQueue.poll(timeoutSeconds, TimeUnit.SECONDS);
     }
 
     @Override
