@@ -23,7 +23,7 @@ public class HeartbeatManager implements Runnable {
 
             InetAddress diretoriaAddr = InetAddress.getByName(servidor.getDiretoriaIp());
 
-            String payload = String.format("HEARTBEAT;%d", servidor.getPortoTCPClientes()); // Falta adicionar a versao da BD
+            String payload = String.format("HEARTBEAT;%d;%d", servidor.getPortoTCPClientes(), servidor.getDBversion());
 
             byte[] data = payload.getBytes();
 
