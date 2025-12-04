@@ -2,6 +2,7 @@ package pt.isec.pd.tp.Server.logica;
 
 import pt.isec.pd.tp.Server.ServidorMain;
 import pt.isec.pd.tp.Server.comunicacao.ClienteHandler;
+import pt.isec.pd.tp.Server.comunicacao.MulticastSpeaker;
 import pt.isec.pd.tp.Server.dados.DBManager;
 import pt.isec.pd.tp.Client.Client;
 import pt.isec.pd.tp.Utils.Mensagem;
@@ -13,6 +14,7 @@ public class ServidorLogica {
     private final ServidorMain servidorMain;
 
     private final DBManager dbManager;
+    private MulticastSpeaker multicastSpeaker;
 
     // Lista de clientes conectados para enviar notificações
     private final Set<ClienteHandler> activeClients = Collections.synchronizedSet(new HashSet<>());
@@ -21,7 +23,10 @@ public class ServidorLogica {
 
         this.servidorMain = servidorMain;
         this.dbManager = dbManager;
+    }
 
+    public void setMulticastSpeaker(MulticastSpeaker multicastSpeaker) {
+        this.multicastSpeaker = multicastSpeaker;
     }
 
     public boolean isServidorPrincipal() {
@@ -172,8 +177,49 @@ public class ServidorLogica {
         return new Mensagem(Mensagem.Tipo.OPERACAO_FALHOU, null);
     }
 
-    public Integer getVersaoBaseDados() {
-        return dbManager.getVersaoDB();
+    public void enviarNotificacaoDB(String sql, Object... params) {
+        String formattedSql = formatSql(sql, params);
+        notificarAlteracaoDB(formattedSql);
+    }
+
+    private String formatSql(String sql, Object... params) {
+        StringBuilder formattedSql = new StringBuilder();
+        int paramIndex = 0;
+        for (int i = 0; i < sql.length(); i++) {
+            if (sql.charAt(i) == '?' && paramIndex < params.length) {
+                Object param = params[paramIndex++];
+                String paramValue;
+                if (param instanceof String) {
+                    paramValue = "'" + ((String) param).replace("'", "''") + "'";
+                } else if (param == null) {
+                    paramValue = "NULL";
+                } else {
+                    paramValue = param.toString();
+                }
+                formattedSql.append(paramValue);
+            } else {
+                formattedSql.append(sql.charAt(i));
+            }
+        }
+        return formattedSql.toString();
+    }
+
+    public void notificarAlteracaoDB(String sql) {
+        System.out.println("isPrincipal: " + isServidorPrincipal() + "\n multicastSpeaker: " + (multicastSpeaker != null));
+        if (isServidorPrincipal() && multicastSpeaker != null) {
+            System.out.println("fds");
+            multicastSpeaker.sendDatabaseUpdate(dbManager.getVersaoDB(), sql);
+        }
+    }
+
+    public String getVersaoBaseDados() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(dbManager.getVersaoDB());
+        sb.append(";");
+        sb.append(servidorMain.getPortoTCPClientes());
+        sb.append(";");
+        sb.append(servidorMain.getdbPort());
+        return sb.toString();
     }
 
     public void addClienteHandler(ClienteHandler handler) {
@@ -191,8 +237,14 @@ public class ServidorLogica {
             Integer versaoBD = Integer.parseInt(mensagem.split(";")[0]);
             Integer tcpPortClientes = Integer.parseInt(mensagem.split(";")[1]);
             Integer tcpPortDBSync = Integer.parseInt(mensagem.split(";")[2]);
+        }
 
-            //servidorMain.atualizarInfoServidorPrincipal(versaoBD, tcpPortClientes, tcpPortDBSync);
+        if(mensagem.split(";").length == 2){
+            Integer versaoBD = Integer.parseInt(mensagem.split(";")[0]);
+            dbManager.setVersaoDB(versaoBD);
+            String sql = mensagem.split(";")[1];
+
+            dbManager.executeUpdate(sql);
         }
     }
 
