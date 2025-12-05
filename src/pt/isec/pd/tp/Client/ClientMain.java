@@ -5,10 +5,7 @@ import pt.isec.pd.tp.Client.Comunicacao.ClientListener;
 import pt.isec.pd.tp.Client.Vista.ClientVista;
 import pt.isec.pd.tp.Utils.Mensagem;
 
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.*;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.net.UnknownHostException;
@@ -17,6 +14,8 @@ import java.util.Arrays;
 import java.util.List;
 
 public class ClientMain {
+
+    private static final String Pasta_CSV = "../../../../../../csv";
 
     private ClientListener listener;
     private Thread listenerThread;
@@ -764,12 +763,32 @@ public class ClientMain {
     }
 
     private void exportarResultadosParaCSV(String[] detalhes, List<String[]> estatisticas) {
-        String filename = vista.lerStringObrigatoria("Introduza o nome do ficheiro CSV (ex: resultados.csv): ");
-        if (!filename.toLowerCase().endsWith(".csv")) {
-            filename += ".csv";
+
+        String filenameRaw = vista.lerStringObrigatoria("Introduza o nome do ficheiro CSV (ex: resultados.csv): ");
+        String filename;
+
+        if (!filenameRaw.toLowerCase().endsWith(".csv")) {
+            filename = filenameRaw + ".csv";
+        } else {
+            filename = filenameRaw;
         }
 
-        try (FileWriter writer = new FileWriter(filename)) {
+        File csvDir = new File(Pasta_CSV);
+
+        if (!csvDir.exists()) {
+            if (csvDir.mkdirs()) {
+                vista.mostrarInfo("Pasta 'csv' criada com sucesso.");
+            } else {
+                vista.mostrarErro("ERRO: Não foi possível criar a pasta 'csv'. A exportação não será efetuada no local desejado.");
+                return;
+            }
+        }
+
+        // 3. Criar o objeto File que aponta para o ficheiro dentro da pasta 'csv'
+        File finalFile = new File(csvDir, filename);
+        String fullPath = finalFile.getAbsolutePath();
+
+        try (FileWriter writer = new FileWriter(finalFile)) {
             String enunciado = detalhes[2];
             String opcoesStr = detalhes[3];
             String dataInicio = detalhes[4];
@@ -804,7 +823,7 @@ public class ClientMain {
                 String respostaLetra = resposta[3];
                 writer.append(String.format("\"%s\";\"%s\";\"%s\";\"%s\"\n", numEstudante, nomeEstudante, emailEstudante, respostaLetra));
             }
-            vista.mostrarInfo("Resultados exportados com sucesso para " + filename);
+            vista.mostrarInfo("Resultados exportados com sucesso para " + fullPath);
         } catch (IOException e) {
             vista.mostrarErro("Ocorreu um erro ao escrever o ficheiro CSV: " + e.getMessage());
         } catch (Exception e) {
