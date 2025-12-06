@@ -86,7 +86,7 @@ public class ClienteHandler implements Runnable {
                     }
                     else {
                         // Processar outras mensagens
-                        resposta = logica.processarMensagem(msg, this); // TODO: Implementar em ServidorLogica
+                        resposta = logica.processarMensagem(msg, this);
                         oos.writeObject(resposta);
                     }
                 }
@@ -104,7 +104,7 @@ public class ClienteHandler implements Runnable {
         }
     }
 
-    // Método para o ServidorLogica usar para enviar notificações
+    // Method para o ServidorLogica usar para enviar notificações
     public void enviarNotificacao(Mensagem msg) {
         try {
             if (oos != null && !socket.isClosed()) {

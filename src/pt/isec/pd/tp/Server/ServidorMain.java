@@ -39,9 +39,10 @@ public class ServidorMain {
     private DBSyncSender dbSyncSender;
 
     ScheduledExecutorService heartbeat;
-    ScheduledExecutorService multicastSpeaker;
 
     Scanner scanner;
+
+
 
     public void start() {
         try {
@@ -111,8 +112,10 @@ public class ServidorMain {
             MulticastListener multicastListener = new MulticastListener(logica, multicastIp, running, multicastSocket);
             new Thread(multicastListener).start();
 
-            multicastSpeaker = Executors.newSingleThreadScheduledExecutor();
-            multicastSpeaker.scheduleAtFixedRate( new MulticastSpeaker(logica, multicastIp, running), Configs.HEARTBEAT_INTERVAL_MS, Configs.HEARTBEAT_INTERVAL_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
+            MulticastSpeaker multicastSpeaker = new MulticastSpeaker( logica, multicastIp, running);
+            new Thread(multicastSpeaker).start();
+            logica.setMulticastSpeaker(multicastSpeaker);
+
             scanner = new Scanner(System.in);
             while (running) {
                 System.out.println("Servidor a correr pressione Enter para encerrar o servidor...");
@@ -140,8 +143,12 @@ public class ServidorMain {
                 if(!isPrincipal) {
                     String[] parts = response.split(";");
                     if (parts.length == 3) {
-                        principalIp = parts[1];
-                        principalPort = Integer.parseInt(parts[2]);
+                        String newPrincipalIp = parts[1];
+                        if (!newPrincipalIp.equals(principalIp)) {
+                            System.out.println("O servidor principal mudou para: " + newPrincipalIp);
+                            principalIp = newPrincipalIp;
+                            principalPort = Integer.parseInt(parts[2]);
+                        }
                     } else {
                         throw new IllegalArgumentException("Resposta de heartbeat inválida: " + response);
                     }
@@ -167,7 +174,7 @@ public class ServidorMain {
         }
     }
 
-    private void obterBaseDadosDoPrincipal(String ip, int port) throws IOException {//TODO comfirma se está de acordo com o protocolo NUNO
+    private void obterBaseDadosDoPrincipal(String ip, int port) throws IOException {
         System.out.println("A obter cópia da BD do principal (" + ip + ":" + port + ")...");
         try (Socket socket = new Socket(ip, port);
              InputStream is = socket.getInputStream();
@@ -185,12 +192,13 @@ public class ServidorMain {
         }
     }
 
-    public ServidorMain(String diretoriaIp, int diretoriaPort, String dbPath, String multicastIp) {
+    public ServidorMain(String diretoriaIp, int diretoriaPort, String dbPath, String multicastIp) throws IOException {
         this.diretoriaIp = diretoriaIp;
         this.diretoriaPort = diretoriaPort;
         this.multicastIp = multicastIp;
         this.dbManager = new DBManager(dbPath);
         this.logica = new ServidorLogica(this, this.dbManager);
+        this.dbManager.setServidorLogica(this.logica);
     }
 
     public boolean isRunning() { return running; }
@@ -199,6 +207,9 @@ public class ServidorMain {
     public int getPortoTCPClientes() { return portoTCPClientes; }
     public String getDiretoriaIp() { return diretoriaIp; }
     public int getDiretoriaPort() { return diretoriaPort; }
+    public String getPrincipalIp() { return principalIp; }
+    public int getDBversion(){ return dbManager.getVersaoDB(); }
+    public int getdbPort(){return dbSyncSender.getLocalPort();}
 
     public void stop() {
         System.out.println("A encerrar o servidor...");
@@ -219,16 +230,16 @@ public class ServidorMain {
         if (dbSyncSender != null) {
             dbSyncSender.stop();
         }
-        if(multicastSpeaker != null && !multicastSpeaker.isShutdown())
-            multicastSpeaker.shutdownNow();
-        if(multicastSocket != null && !multicastSocket.isClosed()) {
-            multicastSocket.close();
-        }
+
         if (tcpListener != null) {
             tcpListener.close();
         }
         if(tcpThread != null && tcpThread.isAlive())
             tcpThread.interrupt();
+
+        if(multicastSocket != null)
+            multicastSocket.close();
+
         if(heartbeat != null && !heartbeat.isShutdown())
             heartbeat.shutdownNow();
         setPrincipal(false);
