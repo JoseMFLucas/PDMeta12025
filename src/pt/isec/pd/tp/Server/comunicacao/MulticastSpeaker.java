@@ -9,7 +9,7 @@ public class MulticastSpeaker implements Runnable {
 
     private final ServidorLogica logica;
     private final String multicastInterfaceIp; // IP da interface de rede
-    private final boolean running;
+    private boolean running;
     private MulticastSocket socket;
 
 
@@ -65,7 +65,6 @@ public class MulticastSpeaker implements Runnable {
                 socket.joinGroup(group, netIf);
             }
             String payload = version + ";" + sql;
-            System.out.println(payload);
             byte[] buffer = payload.getBytes();
             DatagramPacket packet = new DatagramPacket(buffer, buffer.length, group);
             socket.send(packet);}
@@ -74,7 +73,19 @@ public class MulticastSpeaker implements Runnable {
                 System.out.println("Warning: " + e.getMessage());
             System.out.println("A encerrar o MulticastListener");
         }
-        }
+    }
+
+    public boolean isRunning() {
+        return running;
+    }
+
+    public void stop() {
+        if(running)
+            running = false;
+        if(socket != null && !socket.isClosed())
+            socket.close();
+
+    }
 
 
 }

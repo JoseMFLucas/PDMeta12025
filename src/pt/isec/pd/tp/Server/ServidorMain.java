@@ -33,6 +33,8 @@ public class ServidorMain {
     private boolean isPrincipal = false;
     private final ServidorLogica logica;
 
+    MulticastSpeaker multicastSpeaker;
+
     private boolean running = true;
 
     private int portoTCPClientes;
@@ -112,7 +114,7 @@ public class ServidorMain {
             MulticastListener multicastListener = new MulticastListener(logica, multicastIp, running, multicastSocket);
             new Thread(multicastListener).start();
 
-            MulticastSpeaker multicastSpeaker = new MulticastSpeaker( logica, multicastIp, running);
+            multicastSpeaker = new MulticastSpeaker( logica, multicastIp, running);
             new Thread(multicastSpeaker).start();
             logica.setMulticastSpeaker(multicastSpeaker);
 
@@ -213,6 +215,8 @@ public class ServidorMain {
 
     public void stop() {
         System.out.println("A encerrar o servidor...");
+        setPrincipal(false);
+        running = false;
 
         try(DatagramSocket udpsocket = new DatagramSocket()) {
             udpsocket.setSoTimeout(Configs.SERVER_TIMEOUT_MS);
@@ -242,8 +246,10 @@ public class ServidorMain {
 
         if(heartbeat != null && !heartbeat.isShutdown())
             heartbeat.shutdownNow();
-        setPrincipal(false);
-        running = false;
+
+        if(multicastSpeaker.isRunning())
+            multicastSpeaker.stop();
+
         if(scanner != null)
             scanner.close();
         System.out.println("Servidor terminado clique Enter para o finalizar.");
