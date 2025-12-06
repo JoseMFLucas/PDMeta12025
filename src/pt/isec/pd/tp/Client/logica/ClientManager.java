@@ -102,9 +102,9 @@ public class ClientManager {
         enviarMensagem(new Mensagem(Mensagem.Tipo.LOGIN, client));
     }
 
-    public void registar(Client cliente) {
-        Mensagem.Tipo tipo = cliente.getTipo() == Client.Tipo.DOCENTE ? Mensagem.Tipo.REGISTO_DOCENTE : Mensagem.Tipo.REGISTO_ESTUDANTE;
-        enviarMensagem(new Mensagem(tipo, cliente));
+    public void registar(String tipoC, String[] info) {
+        Mensagem.Tipo tipo = tipoC.equalsIgnoreCase(Client.Tipo.DOCENTE.toString()) ? Mensagem.Tipo.REGISTO_DOCENTE : Mensagem.Tipo.REGISTO_ESTUDANTE;
+        enviarMensagem(new Mensagem(tipo, info));
     }
 
     public void criarPergunta(String enunciado, List<String> opcoes, int opcaoCorreta) {
