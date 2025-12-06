@@ -123,7 +123,6 @@ public class ServidorDiretoriaMain {
 
             server.updateLastHeartbeatTime();
             try {
-                String [] args = responseStr.split(";");
                 activeServers.sort(Comparator.comparingLong(ServerInfo::getRegistrationTime));
 
                 if(!activeServers.isEmpty() && activeServers.get(0).equals(server))
@@ -152,8 +151,6 @@ public class ServidorDiretoriaMain {
     private void processPacket(DatagramPacket packet) {
         try {
             String request = new String(packet.getData(), 0, packet.getLength());
-
-            StringTokenizer tokenizer = new StringTokenizer(request, ";");
             String responseStr = MessageCodes.ERROR.toString();
 
 
