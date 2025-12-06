@@ -1,11 +1,15 @@
 package pt.isec.pd.tp.Server.dados;
 
 import pt.isec.pd.tp.Client.Client;
+import pt.isec.pd.tp.Server.logica.ServidorLogica;
+import pt.isec.pd.tp.Utils.CodigoAcessoGenerator;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.*;
 
 import java.time.LocalDateTime;
@@ -13,28 +17,30 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import pt.isec.pd.tp.Utils.CodigoAcessoGenerator;
 
 public class DBManager {
 
-    private static final String DB_FILE_NAME = "pdtp.db";
     private final String dbPath;
     private Connection conn;
     private int versaoDB;
+    private ServidorLogica servidorLogica;
 
     public DBManager(String dbPath) {
-        this.dbPath = dbPath;
+        Path providedPath = Paths.get(dbPath).toAbsolutePath();
+        this.dbPath = providedPath.toString();
         this.conn = connectDB();
-        versaoDB = 0;
+        this.versaoDB = getVersaoDBFromDB();
+    }
+
+    public void setServidorLogica(ServidorLogica servidorLogica) {
+        this.servidorLogica = servidorLogica;
     }
 
     private Connection connectDB() {
-        Path providedPath = Paths.get(this.dbPath).normalize();
+        Path dbFilePath = Paths.get(this.dbPath);
+        Path dbFolder = dbFilePath.getParent();
 
-        Path dbFolder = providedPath;
-        Path dbFilePath = dbFolder.resolve(DB_FILE_NAME);
-
-        String dbUrl = "jdbc:sqlite:" + dbFilePath.toAbsolutePath();
+        String dbUrl = "jdbc:sqlite:" + this.dbPath;
 
         Connection connection = null;
         boolean dbExists = Files.exists(dbFilePath);
@@ -72,8 +78,8 @@ public class DBManager {
     private static String sqlTables() {
         return
                 "CREATE TABLE Configuracao (" +
-                        "    codigoregisto TEXT PRIMARY KEY NOT NULL," +
-                        "    versao TEXT NOT NULL" +
+                        "    codigounico_docente_hash TEXT PRIMARY KEY NOT NULL," +
+                        "    versao_db INTEGER NOT NULL" +
                         ");" +
 
                         // Tabela Docente
@@ -123,12 +129,11 @@ public class DBManager {
                         "    opcao_escolhida_indice INTEGER NOT NULL," +
                         "    esta_certa BOOLEAN NOT NULL," +
                         "    PRIMARY KEY (idpergunta, numero_estudante)," +
-                        "    FOREIGN KEY (idpergunta) REFERENCES Pergunta(idpergunta)," +
-                        "    FOREIGN KEY (numero_estudante) REFERENCES Estudante(numero_estudante)" +
+                        "    FOREIGN KEY (idpergunta) REFERENCES Pergunta(idpergunta)" +
                         ");" +
 
-                        "INSERT INTO Configuracao (codigoregisto, versao)" +
-                        "    VALUES ('INIT', '0');"
+                        "INSERT INTO Configuracao (codigounico_docente_hash, versao_db)" +
+                        "    VALUES ('" + hashPassword("admin") + "', 0);"
                 ;
     }
 
@@ -149,6 +154,22 @@ public class DBManager {
 
         } catch (SQLException e) {
             System.err.println("Erro durante a criação das tabelas: " + e.getMessage());
+        }
+    }
+
+    private static String hashPassword(String password) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(password.getBytes());
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -197,8 +218,9 @@ public class DBManager {
         if (conn == null) {
             return -1;
         }
-        String idColumn = userType.equals("DOCENTE") ? "iddocente" : "idestudante";
-        String sql = "SELECT " + idColumn + " FROM " + userType + " WHERE email = ?";
+        String idColumn = userType.equals("DOCENTE") ? "iddocente" : "numero_estudante";
+        String tableName = userType.equals("DOCENTE") ? "Docente" : "Estudante";
+        String sql = "SELECT " + idColumn + " FROM " + tableName + " WHERE email = ?";
 
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, email);
@@ -226,15 +248,21 @@ public class DBManager {
             conn.setAutoCommit(false);
 
             try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-                pstmt.setInt(1, Integer.parseInt(msg[0]));
-                pstmt.setString(2, msg[1]);
-                pstmt.setString(3, msg[2]);
-                pstmt.setString(4, msg[3]);
+                int numeroEstudante = Integer.parseInt(msg[0]);
+                String nome = msg[1];
+                String email = msg[2];
+                String password = msg[3];
+
+                pstmt.setInt(1, numeroEstudante);
+                pstmt.setString(2, nome);
+                pstmt.setString(3, email);
+                pstmt.setString(4, password);
 
                 int linhasAfetadas = pstmt.executeUpdate();
 
                 if (linhasAfetadas > 0) {
                     conn.commit();
+                    updateDB(sql, numeroEstudante, nome, email, password);
                     return true;
                 }
             }
@@ -264,7 +292,7 @@ public class DBManager {
         }
 
         String sql = "INSERT INTO Docente (nome, email, password) VALUES (?, ?, ?)";
-        String sql_codigounico = "SELECT codigoregisto FROM Configuracao";
+        String sql_codigounico = "SELECT codigounico_docente_hash FROM Configuracao";
         boolean originalAutoCommit = false;
 
         try {
@@ -274,16 +302,21 @@ public class DBManager {
             try (Statement stmt = conn.createStatement();
                  ResultSet rs = stmt.executeQuery(sql_codigounico)) {
 
-                if (rs.next() && rs.getString("codigoregisto").equals(msg[3])) {
+                if (rs.next() && rs.getString("codigounico_docente_hash").equals(hashPassword(msg[3]))) {
                     try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-                        pstmt.setString(1, msg[0]);
-                        pstmt.setString(2, msg[1]);
-                        pstmt.setString(3, msg[2]);
+                        String nome = msg[0];
+                        String email = msg[1];
+                        String password = msg[2];
+
+                        pstmt.setString(1, nome);
+                        pstmt.setString(2, email);
+                        pstmt.setString(3, password);
 
                         int linhasAfetadas = pstmt.executeUpdate();
 
                         if (linhasAfetadas > 0) {
                             conn.commit(); // Confirma a transação
+                            updateDB(sql, nome, email, password);
                             return true;
                         }
                     }
@@ -324,19 +357,27 @@ public class DBManager {
             originalAutoCommit = conn.getAutoCommit();
             conn.setAutoCommit(false); // Inicia a transação
 
+            int idDocente = Integer.parseInt(msg[0]);
+            String enunciado = msg[1];
+            String codigoAcesso = CodigoAcessoGenerator.gerarCodigo();
+            String dataInicio = msg[3];
+            String dataFim = msg[4];
+            int opcaoCorreta = Integer.parseInt(msg[5]);
+
             // 1. Inserir a pergunta
             try (PreparedStatement pstmt = conn.prepareStatement(sqlAddPergunta)) {
-                pstmt.setInt(1, Integer.parseInt(msg[0]));
-                pstmt.setString(2, msg[1]);
-                pstmt.setString(3, CodigoAcessoGenerator.gerarCodigo());
-                pstmt.setString(4, msg[3]);
-                pstmt.setString(5, msg[4]);
-                pstmt.setInt(6, Integer.parseInt(msg[5]));
+                pstmt.setInt(1, idDocente);
+                pstmt.setString(2, enunciado);
+                pstmt.setString(3, codigoAcesso);
+                pstmt.setString(4, dataInicio);
+                pstmt.setString(5, dataFim);
+                pstmt.setInt(6, opcaoCorreta);
 
                 int linhasAfetadas = pstmt.executeUpdate();
                 if (linhasAfetadas == 0) {
                     throw new SQLException("Falha ao inserir a pergunta, nenhuma linha afetada.");
                 }
+                updateDB(sqlAddPergunta, idDocente, enunciado, codigoAcesso, dataInicio, dataFim, opcaoCorreta);
             }
 
             // 2. Obter o ID da pergunta gerado (forma correta para SQLite)
@@ -359,6 +400,7 @@ public class DBManager {
                     pstmtOpcao.setInt(2, i + 1);
                     pstmtOpcao.setString(3, opcoes[i]);
                     pstmtOpcao.addBatch();
+                    updateDB(sqlAddOpcao, idpergunta, i + 1, opcoes[i]);
                 }
                 pstmtOpcao.executeBatch();
             }
@@ -468,6 +510,7 @@ public class DBManager {
                 pstmt.setInt(4, opcaoCorreta);
                 pstmt.setInt(5, idPergunta);
                 pstmt.executeUpdate();
+                updateDB(sqlUpdatePergunta, enunciado, dataInicio, dataFim, opcaoCorreta, idPergunta);
             }
 
             // 2. Apagar as opções antigas
@@ -475,19 +518,21 @@ public class DBManager {
             try (PreparedStatement pstmt = conn.prepareStatement(sqlDeleteOpcoes)) {
                 pstmt.setInt(1, idPergunta);
                 pstmt.executeUpdate();
+                updateDB(sqlDeleteOpcoes, idPergunta);
             }
 
             // 3. Inserir as novas opções
             String[] novasOpcoes = opcoesString.substring(1, opcoesString.length() - 1).split(", ");
             String sqlInsertOpcao = "INSERT INTO Opcao (idpergunta, indice, texto) VALUES (?, ?, ?)";
-            try (PreparedStatement pstmt = conn.prepareStatement(sqlInsertOpcao)) {
+            try (PreparedStatement pstmtOpcao = conn.prepareStatement(sqlInsertOpcao)) {
                 for (int i = 0; i < novasOpcoes.length; i++) {
-                    pstmt.setInt(1, idPergunta);
-                    pstmt.setInt(2, i + 1);
-                    pstmt.setString(3, novasOpcoes[i]);
-                    pstmt.addBatch();
+                    pstmtOpcao.setInt(1, idPergunta);
+                    pstmtOpcao.setInt(2, i + 1);
+                    pstmtOpcao.setString(3, novasOpcoes[i]);
+                    pstmtOpcao.addBatch();
+                    updateDB(sqlInsertOpcao, idPergunta, i + 1, novasOpcoes[i]);
                 }
-                pstmt.executeBatch();
+                pstmtOpcao.executeBatch();
             }
 
             conn.commit(); // Confirma a transação
@@ -520,13 +565,13 @@ public class DBManager {
         String novoValor = dadosEdicao[2];
         String codigoRegisto = dadosEdicao[3];
 
-        String sqlCheckCode = "SELECT codigoregisto FROM Configuracao WHERE codigoregisto = ?";
+        String sqlCheckCode = "SELECT codigounico_docente_hash FROM Configuracao WHERE codigounico_docente_hash = ?";
         String sqlUpdate = "UPDATE Docente SET " + campo + " = ? WHERE iddocente = ?";
 
         try {
             // 1. Verificar o código de registo
             try (PreparedStatement pstmt = conn.prepareStatement(sqlCheckCode)) {
-                pstmt.setString(1, codigoRegisto);
+                pstmt.setString(1, hashPassword(codigoRegisto));
                 try (ResultSet rs = pstmt.executeQuery()) {
                     if (!rs.next()) {
                         // Código de registo inválido
@@ -541,13 +586,17 @@ public class DBManager {
                 pstmt.setString(1, novoValor);
                 pstmt.setInt(2, idDocente);
                 int linhasAfetadas = pstmt.executeUpdate();
-                return linhasAfetadas > 0;
+                if(linhasAfetadas > 0){
+                    updateDB(sqlUpdate, novoValor, idDocente);
+                    return true;
+                }
             }
 
         } catch (SQLException | NumberFormatException e) {
             System.err.println("Erro ao editar perfil do docente: " + e.getMessage());
             return false;
         }
+        return false;
     }
 
 
@@ -567,6 +616,7 @@ public class DBManager {
             try (PreparedStatement pstmtOpcoes = conn.prepareStatement(sqlDeleteOpcoes)) {
                 pstmtOpcoes.setInt(1, idpergunta);
                 pstmtOpcoes.executeUpdate();
+                updateDB(sqlDeleteOpcoes, idpergunta);
                 System.out.println("Opções associadas á questão são eliminadas.");
             }
 
@@ -579,6 +629,7 @@ public class DBManager {
 
                 if (linhasAfetadas > 0) {
                     conn.commit(); // Confirma ambas as eliminações
+                    updateDB(sqlDeletePergunta, idpergunta);
                     System.out.println("Pergunta eliminada com sucesso.");
                     return true;
                 } else {
@@ -653,13 +704,49 @@ public class DBManager {
 
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) {
-                    String[] pergunta = {
-                            String.valueOf(rs.getInt("idpergunta")),
-                            rs.getString("enunciado"),
-                            rs.getString("codigo_acesso"),
-                            rs.getString("data_hora_inicio"),
-                            rs.getString("data_hora_fim")
-                    };
+                    int idPergunta = rs.getInt("idpergunta");
+                    String[] pergunta;
+
+                    if (filtro.equalsIgnoreCase("expiradas")) {
+                        String sqlStats = "SELECT COUNT(*) as total_respostas, SUM(CASE WHEN esta_certa = 1 THEN 1 ELSE 0 END) as respostas_certas FROM Resposta WHERE idpergunta = ?";
+                        try (PreparedStatement pstmtStats = conn.prepareStatement(sqlStats)) {
+                            pstmtStats.setInt(1, idPergunta);
+                            try (ResultSet rsStats = pstmtStats.executeQuery()) {
+                                if (rsStats.next()) {
+                                    int totalRespostas = rsStats.getInt("total_respostas");
+                                    int respostasCertas = rsStats.getInt("respostas_certas");
+                                    double percentagem = (totalRespostas > 0) ? ((double) respostasCertas / totalRespostas) * 100 : 0;
+                                    pergunta = new String[]{
+                                            String.valueOf(idPergunta),
+                                            rs.getString("enunciado"),
+                                            rs.getString("codigo_acesso"),
+                                            rs.getString("data_hora_inicio"),
+                                            rs.getString("data_hora_fim"),
+                                            String.valueOf(totalRespostas),
+                                            String.format("%.2f%%", percentagem)
+                                    };
+                                } else {
+                                    pergunta = new String[]{
+                                            String.valueOf(idPergunta),
+                                            rs.getString("enunciado"),
+                                            rs.getString("codigo_acesso"),
+                                            rs.getString("data_hora_inicio"),
+                                            rs.getString("data_hora_fim"),
+                                            "0",
+                                            "0.00%"
+                                    };
+                                }
+                            }
+                        }
+                    } else {
+                        pergunta = new String[]{
+                                String.valueOf(idPergunta),
+                                rs.getString("enunciado"),
+                                rs.getString("codigo_acesso"),
+                                rs.getString("data_hora_inicio"),
+                                rs.getString("data_hora_fim")
+                        };
+                    }
                     perguntas.add(pergunta);
                 }
             }
@@ -671,6 +758,85 @@ public class DBManager {
         return perguntas;
     }
 
+    public List<String[]> getEstatisticasPerguntaExpirada(int id_pergunta) {
+        if (conn == null) {
+            return null;
+        }
+
+        List<String[]> resultado = new ArrayList<>();
+        String sqlPergunta = "SELECT p.enunciado, p.data_hora_fim, p.opcao_correta_indice, GROUP_CONCAT(o.texto, ';') as opcoes " +
+                "FROM Pergunta p JOIN Opcao o ON p.idpergunta = o.idpergunta " +
+                "WHERE p.idpergunta = ? " +
+                "GROUP BY p.idpergunta";
+
+        String sqlRespostas = "SELECT e.numero_estudante, e.nome, e.email, r.opcao_escolhida_indice, r.data_hora_realizacao, o.texto as resposta_texto " +
+                "FROM Resposta r " +
+                "JOIN Estudante e ON r.numero_estudante = e.numero_estudante " +
+                "JOIN Opcao o ON r.idpergunta = o.idpergunta AND r.opcao_escolhida_indice = o.indice " +
+                "WHERE r.idpergunta = ?";
+
+        try {
+            // 1. Obter detalhes da pergunta
+            try (PreparedStatement pstmt = conn.prepareStatement(sqlPergunta)) {
+                pstmt.setInt(1, id_pergunta);
+                try (ResultSet rs = pstmt.executeQuery()) {
+                    if (rs.next()) {
+                        String[] detalhesPergunta = {
+                                rs.getString("enunciado"),
+                                rs.getString("data_hora_fim"),
+                                rs.getString("opcoes"),
+                                String.valueOf(rs.getInt("opcao_correta_indice"))
+                        };
+                        resultado.add(detalhesPergunta);
+                    } else {
+                        return null; // Pergunta não encontrada
+                    }
+                }
+            }
+
+            // 2. Obter respostas dos estudantes e calcular estatísticas
+            int totalRespostas = 0;
+            int respostasCertas = 0;
+            List<String[]> respostasAlunos = new ArrayList<>();
+
+            try (PreparedStatement pstmt = conn.prepareStatement(sqlRespostas)) {
+                pstmt.setInt(1, id_pergunta);
+                try (ResultSet rs = pstmt.executeQuery()) {
+                    int opcaoCorreta = Integer.parseInt(resultado.get(0)[3]);
+                    while (rs.next()) {
+                        totalRespostas++;
+                        int opcaoEscolhida = rs.getInt("opcao_escolhida_indice");
+                        if (opcaoEscolhida == opcaoCorreta) {
+                            respostasCertas++;
+                        }
+                        String[] respostaAluno = {
+                                String.valueOf(rs.getInt("numero_estudante")),
+                                rs.getString("nome"),
+                                rs.getString("email"),
+                                rs.getString("resposta_texto"),
+                                rs.getString("data_hora_realizacao")
+                        };
+                        respostasAlunos.add(respostaAluno);
+                    }
+                }
+            }
+
+            // 3. Adicionar estatísticas
+            double percentagemCertas = (totalRespostas > 0) ? ((double) respostasCertas / totalRespostas) * 100 : 0;
+            resultado.add(new String[]{String.format("%.2f%%", percentagemCertas)});
+
+            // 4. Adicionar respostas dos alunos
+            resultado.addAll(respostasAlunos);
+
+        } catch (SQLException e) {
+            System.err.println("Erro ao obter estatísticas da pergunta: " + e.getMessage());
+            return null;
+        }
+
+        return resultado;
+    }
+
+
     public List<String[]> listarPerguntasRespondidas(int idEstudante) {
         if (conn == null) {
             return null;
@@ -680,7 +846,7 @@ public class DBManager {
         String sql = "SELECT p.enunciado, r.data_hora_realizacao, r.opcao_escolhida_indice, r.esta_certa " +
                      "FROM Resposta r " +
                      "JOIN Pergunta p ON r.idpergunta = p.idpergunta " +
-                     "WHERE r.idestudante = ? " +
+                     "WHERE r.numero_estudante = ? " +
                      "ORDER BY r.data_hora_realizacao DESC";
 
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -748,24 +914,50 @@ public class DBManager {
     public boolean submeterResposta(int idEstudante, int idPergunta, int opcaoEscolhida) {
         if (conn == null) return false;
 
-        String sqlGetRespostaCorreta = "SELECT opcao_correta_indice FROM Pergunta WHERE idpergunta = ?";
-        String sqlInsertResposta = "INSERT INTO Resposta (idpergunta, idestudante, data_hora_realizacao, opcao_escolhida_indice, esta_certa) VALUES (?, ?, ?, ?, ?)";
+        String sqlCheckRespostaExistente = "SELECT COUNT(*) FROM Resposta WHERE idpergunta = ? AND numero_estudante = ?";
+        String sqlGetPerguntaStatus = "SELECT opcao_correta_indice, data_hora_inicio, data_hora_fim FROM Pergunta WHERE idpergunta = ?";
+        String sqlInsertResposta = "INSERT INTO Resposta (idpergunta, numero_estudante, data_hora_realizacao, opcao_escolhida_indice, esta_certa) VALUES (?, ?, ?, ?, ?)";
 
         try {
+            // 1. Verificar se o estudante já respondeu a esta pergunta
+            try (PreparedStatement pstmtCheck = conn.prepareStatement(sqlCheckRespostaExistente)) {
+                pstmtCheck.setInt(1, idPergunta);
+                pstmtCheck.setInt(2, idEstudante);
+                try (ResultSet rsCheck = pstmtCheck.executeQuery()) {
+                    if (rsCheck.next() && rsCheck.getInt(1) > 0) {
+                        System.err.println("Erro: Estudante já respondeu a esta pergunta.");
+                        return false; // Estudante já respondeu
+                    }
+                }
+            }
+
+            // 2. Obter detalhes da pergunta e verificar se está ativa
             int opcaoCorreta;
-            try (PreparedStatement pstmt = conn.prepareStatement(sqlGetRespostaCorreta)) {
+            LocalDateTime dataHoraInicio;
+            LocalDateTime dataHoraFim;
+            try (PreparedStatement pstmt = conn.prepareStatement(sqlGetPerguntaStatus)) {
                 pstmt.setInt(1, idPergunta);
                 try (ResultSet rs = pstmt.executeQuery()) {
                     if (rs.next()) {
                         opcaoCorreta = rs.getInt("opcao_correta_indice");
+                        dataHoraInicio = LocalDateTime.parse(rs.getString("data_hora_inicio"), DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm"));
+                        dataHoraFim = LocalDateTime.parse(rs.getString("data_hora_fim"), DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm"));
                     } else {
+                        System.err.println("Erro: Pergunta não existe.");
                         return false; // Pergunta não existe
                     }
                 }
             }
 
+            LocalDateTime agora = LocalDateTime.now();
+            if (agora.isBefore(dataHoraInicio) || agora.isAfter(dataHoraFim)) {
+                System.err.println("Erro: A pergunta não está ativa no momento.");
+                return false; // Pergunta não está ativa
+            }
+
+            // 3. Inserir a resposta
             boolean estaCerta = (opcaoEscolhida == opcaoCorreta);
-            String dataHoraAtual = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            String dataHoraAtual = agora.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
 
             try (PreparedStatement pstmt = conn.prepareStatement(sqlInsertResposta)) {
                 pstmt.setInt(1, idPergunta);
@@ -775,13 +967,17 @@ public class DBManager {
                 pstmt.setBoolean(5, estaCerta);
 
                 int linhasAfetadas = pstmt.executeUpdate();
-                return linhasAfetadas > 0;
+                if(linhasAfetadas > 0){
+                    updateDB(sqlInsertResposta, idPergunta, idEstudante, dataHoraAtual, opcaoEscolhida, estaCerta);
+                    return true;
+                }
             }
 
         } catch (SQLException e) {
             System.err.println("Erro ao submeter resposta: " + e.getMessage());
             return false;
         }
+        return false;
     }
 
     public boolean editarPerfilEstudante(String[] dadosEdicao) {
@@ -793,30 +989,99 @@ public class DBManager {
         String campo = dadosEdicao[1];
         String novoValor = dadosEdicao[2];
 
-        String sqlUpdate = "UPDATE Estudante SET " + campo + " = ? WHERE idestudante = ?";
+        String sqlUpdate = "UPDATE Estudante SET " + campo + " = ? WHERE numero_estudante = ?";
 
         try {
             try (PreparedStatement pstmt = conn.prepareStatement(sqlUpdate)) {
-                pstmt.setString(1, novoValor);
+                Object valorParam;
+                if (campo.equals("numero_estudante")) {
+                    valorParam = Integer.parseInt(novoValor);
+                    pstmt.setInt(1, (Integer) valorParam);
+                } else {
+                    valorParam = novoValor;
+                    pstmt.setString(1, (String) valorParam);
+                }
                 pstmt.setInt(2, idEstudante);
                 int linhasAfetadas = pstmt.executeUpdate();
-                return linhasAfetadas > 0;
+                if(linhasAfetadas > 0) {
+                    updateDB(sqlUpdate, valorParam, idEstudante);
+                    return true;
+                }
             }
         } catch (SQLException | NumberFormatException e) {
             System.err.println("Erro ao editar perfil do estudante: " + e.getMessage());
             return false;
         }
+
+        return false;
     }
+
+    private void updateDB(String sql, Object... params) {
+        if (conn == null) {
+            return;
+        }
+
+        String sqlUpdate = "UPDATE Configuracao SET versao_db = versao_db + 1";
+
+        try{
+            try (PreparedStatement pstmt = conn.prepareStatement(sqlUpdate)) {
+                int linhasAfetadas = pstmt.executeUpdate();
+                if (linhasAfetadas > 0) {
+                    this.versaoDB++;
+                    if (servidorLogica != null) {
+                        servidorLogica.enviarNotificacaoDB(sql, params);
+                    }
+                }
+            }
+        }catch (SQLException e) {
+            System.err.println("Erro ao incrementar a versão da DB: " + e.getMessage());
+        }
+    }
+
+    public void executeUpdate(String sql) {
+        if (conn == null) {
+            System.err.println("Não foi possível executar a query, a conexão com a BD é nula.");
+            return;
+        }
+        System.out.println("A executar query na BD secundária: " + sql);
+        try (Statement stmt = conn.createStatement()) {
+            stmt.executeUpdate(sql);
+        } catch (SQLException e) {
+            System.err.println("Erro ao executar a query na BD secundária: " + e.getMessage());
+        }
+    }
+
 
     public String getDbPath() {
         return dbPath;
     }
 
-    public void setVersaoDB(int versaoDB) {
-        this.versaoDB = versaoDB;
-    }
-
     public int getVersaoDB() {
         return versaoDB;
+    }
+
+    private int getVersaoDBFromDB() {
+        if (conn == null) {
+            return -1;
+        }
+        String sql = "SELECT versao_db FROM Configuracao";
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("versao_db");
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Erro ao obter a versão da DB: " + e.getMessage());
+        }
+        return -1;
+    }
+
+    public void incrementaVersaoDB() {
+        this.versaoDB++;
+    }
+
+    public void setVersaoDB(int versaoDB) {
+        this.versaoDB = versaoDB;
     }
 }

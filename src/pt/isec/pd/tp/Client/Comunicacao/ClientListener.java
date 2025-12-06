@@ -1,5 +1,6 @@
 package pt.isec.pd.tp.Client.Comunicacao;
 
+import pt.isec.pd.tp.Client.ClientMain;
 import pt.isec.pd.tp.Client.Vista.ClientVista;
 import pt.isec.pd.tp.Utils.Mensagem;
 
@@ -12,12 +13,14 @@ import java.util.concurrent.TimeUnit;
 public class ClientListener implements Runnable {
     private final ObjectInputStream in;
     private final ClientVista vista;
+    private final ClientMain main;
     private volatile boolean running = true;
     private final BlockingQueue<Mensagem> responseQueue = new LinkedBlockingQueue<>();
 
-    public ClientListener(ObjectInputStream in, ClientVista vista) {
+    public ClientListener(ObjectInputStream in, ClientVista vista, ClientMain main) {
         this.in = in;
         this.vista = vista;
+        this.main = main;
     }
 
     public void stopRunning() {
@@ -25,8 +28,11 @@ public class ClientListener implements Runnable {
     }
 
     public Mensagem getResponse() throws InterruptedException {
-        // Usa um timeout para evitar que o cliente fique bloqueado indefinidamente
-        return responseQueue.poll(15, TimeUnit.SECONDS);
+        return getResponse(60);
+    }
+
+    public Mensagem getResponse(long timeoutSeconds) throws InterruptedException {
+        return responseQueue.poll(timeoutSeconds, TimeUnit.SECONDS);
     }
 
     @Override
@@ -36,21 +42,17 @@ public class ClientListener implements Runnable {
                 // O listener é o único que lê do stream
                 Mensagem response = (Mensagem) in.readObject();
                 processarMensagem(response);
-            } catch (IOException e) {
+            } catch (IOException | ClassNotFoundException e) {
                 if (running) {
-                    vista.mostrarErro("Erro de leitura na thread de escuta: " + e.getMessage());
-                }
-                running = false;
-            } catch (ClassNotFoundException e) {
-                if (running) {
-                    vista.mostrarErro("Objeto recebido desconhecido: " + e.getMessage());
+                    vista.mostrarAviso("\nLigação com o servidor perdida. A tentar reconectar...");
+                    stopRunning(); // Para o listener atual
+                    main.reconectar();
                 }
             } catch (InterruptedException e) {
                 running = false;
                 Thread.currentThread().interrupt();
             }
         }
-        vista.mostrarInfo("Thread de escuta terminada.");
     }
 
     private void processarMensagem(Mensagem msg) throws InterruptedException {

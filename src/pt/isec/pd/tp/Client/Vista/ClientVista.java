@@ -56,14 +56,16 @@ public class ClientVista {
         System.out.println("2. Editar dados da pergunta");
         System.out.println("3. Eliminar pergunta");
         System.out.println("4. Consultar perguntas");
-        System.out.println("5. Editar dados pessoais");
+        System.out.println("5. Ver estatísticas de pergunta expirada");
+        System.out.println("6. Exportar resultados de pergunta expirada para CSV");
+        System.out.println("7. Editar dados pessoais");
         System.out.println("0. Logout");
         System.out.print("Escolha uma opção: ");
     }
 
     public void menuEstudante() {
         System.out.println("\n--- MENU ESTUDANTE ---");
-        System.out.println("1. Introduzir codigo da pergunta");
+        System.out.println("1. Introduzir còdigo da pergunta");
         System.out.println("2. Consultar perguntas respondidas");
         System.out.println("3. Editar dados pessoais");
         System.out.println("0. Logout");
@@ -199,21 +201,70 @@ public class ClientVista {
         System.out.println("---------------------------\n");
     }
 
-    public void mostrarListaPerguntas(List<String[]> perguntas) {
+    public void mostrarListaPerguntas(List<String[]> perguntas, String filtro) {
         if (perguntas == null || perguntas.isEmpty()) {
             mostrarInfo("Nenhuma pergunta encontrada para o filtro selecionado.");
             return;
         }
+
+        boolean isExpiradas = "expiradas".equalsIgnoreCase(filtro);
+
         System.out.println("\n--- LISTA DE PERGUNTAS ---");
-        System.out.printf("%-5s | %-40s | %-10s | %-19s | %-19s%n", "ID", "Enunciado", "Código", "Início", "Fim");
-        System.out.println("-------------------------------------------------------------------------------------------------");
-        for (String[] pergunta : perguntas) {
-            // Formato: {idpergunta, enunciado, codigo_acesso, data_hora_inicio, data_hora_fim}
-            System.out.printf("%-5s | %-40.40s | %-10s | %-19s | %-19s%n",
-                    pergunta[0], pergunta[1], pergunta[2], pergunta[3], pergunta[4]);
+        if (isExpiradas) {
+            System.out.printf("%-5s | %-40s | %-10s | %-19s | %-19s | %-10s | %-10s%n", "ID", "Enunciado", "Código", "Início", "Fim", "Respostas", "% Certas");
+            System.out.println("--------------------------------------------------------------------------------------------------------------------------");
+        } else {
+            System.out.printf("%-5s | %-40s | %-10s | %-19s | %-19s%n", "ID", "Enunciado", "Código", "Início", "Fim");
+            System.out.println("-------------------------------------------------------------------------------------------------");
         }
-        System.out.println("-------------------------------------------------------------------------------------------------\n");
+
+        for (String[] pergunta : perguntas) {
+            if (isExpiradas) {
+                // Formato: {idpergunta, enunciado, codigo_acesso, data_hora_inicio, data_hora_fim, total_respostas, percentagem_certas}
+                System.out.printf("%-5s | %-40.40s | %-10s | %-19s | %-19s | %-10s | %-10s%n",
+                        pergunta[0], pergunta[1], pergunta[2], pergunta[3], pergunta[4], pergunta[5], pergunta[6]);
+            } else {
+                // Formato: {idpergunta, enunciado, codigo_acesso, data_hora_inicio, data_hora_fim}
+                System.out.printf("%-5s | %-40.40s | %-10s | %-19s | %-19s%n",
+                        pergunta[0], pergunta[1], pergunta[2], pergunta[3], pergunta[4]);
+            }
+        }
+
+        if (isExpiradas) {
+            System.out.println("--------------------------------------------------------------------------------------------------------------------------\n");
+        } else {
+            System.out.println("-------------------------------------------------------------------------------------------------\n");
+        }
     }
+
+    public void mostrarEstatisticasPergunta(List<String[]> estatisticas) {
+        if (estatisticas == null || estatisticas.size() < 2) {
+            mostrarErro("Não foi possível obter as estatísticas da pergunta.");
+            return;
+        }
+
+        String[] detalhesPergunta = estatisticas.get(0);
+        String percentagemCertas = estatisticas.get(1)[0];
+
+        System.out.println("\n--- ESTATÍSTICAS DA PERGUNTA ---");
+        System.out.println("Enunciado: " + detalhesPergunta[0]);
+        System.out.println("Data de Fim: " + detalhesPergunta[1]);
+        System.out.println("Opções: " + detalhesPergunta[2]);
+        System.out.println("Opção Correta: " + detalhesPergunta[3]);
+        System.out.println("Percentagem de Respostas Certas: " + percentagemCertas);
+
+        System.out.println("\n--- RESPOSTAS DOS ALUNOS ---");
+        System.out.printf("%-15s | %-25s | %-25s | %-40s | %-19s%n", "Nº Estudante", "Nome", "Email", "Resposta Escolhida", "Data/Hora");
+        System.out.println("---------------------------------------------------------------------------------------------------------------------------------");
+
+        for (int i = 2; i < estatisticas.size(); i++) {
+            String[] resposta = estatisticas.get(i);
+            System.out.printf("%-15s | %-25s | %-25s | %-40s | %-19s%n",
+                    resposta[0], resposta[1], resposta[2], resposta[3], resposta[4]);
+        }
+        System.out.println("---------------------------------------------------------------------------------------------------------------------------------\n");
+    }
+
 
     public void mostrarPerguntasRespondidas(List<String[]> respostas) {
         if (respostas == null || respostas.isEmpty()) {

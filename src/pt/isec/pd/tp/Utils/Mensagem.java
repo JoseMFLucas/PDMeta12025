@@ -19,8 +19,9 @@ public class Mensagem implements Serializable {
         EDITAR_PERGUNTA,
         ELIMINAR_PERGUNTA,
         LISTAR_PERGUNTAS_DOCENTE,
-        LISTAR_RESULTADOS_PERGUNTA,
+        VER_ESTATISTICAS,
         EXPORTAR_CSV,
+        LISTAR_RESULTADOS_PERGUNTA,
         OBTER_PERGUNTA, // Submeter código da pergunta
         DETALHES_PERGUNTA_ESTUDANTE,
         SUBMETER_RESPOSTA,
@@ -40,9 +41,10 @@ public class Mensagem implements Serializable {
         LISTA_PERGUNTAS,
         LISTA_CLIENTES,
         DETALHES_PERGUNTA, // Para o estudante responder
+        ESTATISTICAS_PERGUNTA,
+        FICHEIRO_CSV,
         LISTA_RESPOSTAS,
         RESULTADOS_PERGUNTA, // Para o docente
-        FICHEIRO_CSV,
         NOTIFICACAO_ASSINCRONA, // [cite: 143, 169]
         ERRO
     }

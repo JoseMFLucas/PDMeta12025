@@ -3,7 +3,6 @@ package pt.isec.pd.tp.Utils;
 public class Configs {
 
     // Endereço e porto Multicast para heartbeats dos servidores
-    public static final String MULTICAST_ADDRESS = "230.30.30.30";
     public static final int MULTICAST_PORT = 3030;
 
     // Intervalo de heartbeat dos servidores (5 segundos)

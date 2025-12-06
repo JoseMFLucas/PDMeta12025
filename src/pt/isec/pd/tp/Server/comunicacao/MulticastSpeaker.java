@@ -10,6 +10,8 @@ public class MulticastSpeaker implements Runnable {
     private final ServidorLogica logica;
     private final String multicastInterfaceIp; // IP da interface de rede
     private final boolean running;
+    private MulticastSocket socket;
+
 
     public MulticastSpeaker(ServidorLogica logica, String multicastInterfaceIp, boolean running) {
         this.logica = logica;
@@ -20,22 +22,26 @@ public class MulticastSpeaker implements Runnable {
     @Override
     public void run() {
 
-        try(MulticastSocket socket = new MulticastSocket()) {
-            if(multicastInterfaceIp == null || multicastInterfaceIp.isEmpty()) {
-                throw new Exception("IP da interface de rede para multicast não definido.");
+        try {
+            while (running) {
+                socket = new MulticastSocket();
+                if (multicastInterfaceIp == null || multicastInterfaceIp.isEmpty()) {
+                    throw new Exception("IP da interface de rede para multicast não definido.");
+                }
+                InetSocketAddress group = new InetSocketAddress(multicastInterfaceIp, Configs.MULTICAST_PORT);
+
+                // Definir a interface de rede para o multicast
+                NetworkInterface netIf = NetworkInterface.getByInetAddress(InetAddress.getLocalHost());
+                socket.setNetworkInterface(netIf);
+
+                socket.joinGroup(group, netIf);
+
+                String payload = logica.getVersaoBaseDados();
+                byte[] buffer = payload.getBytes();
+                DatagramPacket packet = new DatagramPacket(buffer, buffer.length, group);
+                socket.send(packet);
+                Thread.sleep(Configs.HEARTBEAT_INTERVAL_MS);
             }
-            InetSocketAddress group = new InetSocketAddress(multicastInterfaceIp, Configs.MULTICAST_PORT);
-
-            // Definir a interface de rede para o multicast
-            NetworkInterface netIf = NetworkInterface.getByInetAddress(InetAddress.getLocalHost());
-            socket.setNetworkInterface(netIf);
-
-            socket.joinGroup(group, netIf);
-
-            String payload = logica.getVersaoBaseDados().toString() + ";0;0"; // add client handler tcp port and tcp port for db sync
-            byte[] buffer = payload.getBytes();
-            DatagramPacket packet = new DatagramPacket(buffer, buffer.length, group);
-            socket.send(packet);
 
         } catch (Exception e) {
             if(running)
@@ -43,4 +49,32 @@ public class MulticastSpeaker implements Runnable {
             System.out.println("A encerrar o MulticastListener");
         }
     }
+
+    public void sendDatabaseUpdate(int version, String sql) {
+        try {
+            InetSocketAddress group = new InetSocketAddress(multicastInterfaceIp, Configs.MULTICAST_PORT);
+            if(socket == null || socket.isClosed()) {
+                socket = new MulticastSocket();
+                if (multicastInterfaceIp == null || multicastInterfaceIp.isEmpty()) {
+                    throw new Exception("IP da interface de rede para multicast não definido.");
+                }
+                // Definir a interface de rede para o multicast
+                NetworkInterface netIf = NetworkInterface.getByInetAddress(InetAddress.getLocalHost());
+                socket.setNetworkInterface(netIf);
+
+                socket.joinGroup(group, netIf);
+            }
+            String payload = version + ";" + sql;
+            System.out.println(payload);
+            byte[] buffer = payload.getBytes();
+            DatagramPacket packet = new DatagramPacket(buffer, buffer.length, group);
+            socket.send(packet);}
+        catch (Exception e) {
+            if(running)
+                System.out.println("Warning: " + e.getMessage());
+            System.out.println("A encerrar o MulticastListener");
+        }
+        }
+
+
 }

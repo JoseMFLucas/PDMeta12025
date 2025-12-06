@@ -5,9 +5,7 @@ import pt.isec.pd.tp.Client.Comunicacao.ClientListener;
 import pt.isec.pd.tp.Client.Vista.ClientVista;
 import pt.isec.pd.tp.Utils.Mensagem;
 
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.*;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.net.UnknownHostException;
@@ -17,13 +15,15 @@ import java.util.List;
 
 public class ClientMain {
 
+    private static final String Pasta_CSV = "../../../../../../csv";
+
     private ClientListener listener;
     private Thread listenerThread;
 
     private final ClientVista vista;
     private boolean autenticated = false;
     private boolean closing = false;
-    private Socket principalSocket; // Armazena a ligação TCP principal
+    private Socket principalSocket;
 
     private ObjectOutputStream out;
     private ObjectInputStream in;
@@ -36,61 +36,72 @@ public class ClientMain {
 
     String[] info;
 
-    public ClientMain(ClientVista vista, Socket principalSocket){
+    // Server info for reconnection
+    private final String dirIp;
+    private final int dirPort;
+    private String currentServerIp;
+    private int currentServerPort;
+
+    public ClientMain(ClientVista vista, Socket principalSocket, String dirIp, int dirPort, String serverIp, int serverTcpPort) {
         this.vista = vista;
-        this.principalSocket = principalSocket; // Recebe a socket do main
+        this.principalSocket = principalSocket;
+        this.dirIp = dirIp;
+        this.dirPort = dirPort;
+        this.currentServerIp = serverIp;
+        this.currentServerPort = serverTcpPort;
 
         try {
             this.out = new ObjectOutputStream(principalSocket.getOutputStream());
             this.in = new ObjectInputStream(principalSocket.getInputStream());
         } catch (IOException e) {
             vista.mostrarErro("Erro ao criar streams de comunicação: " + e.getMessage());
-            closeResources();
+            shutdown();
         }
-
     }
 
     // Loop Inicial (Menu Principal)
 
-    public void loopInicial() throws IOException {
-        // O listener é iniciado aqui para lidar com todas as respostas do servidor
-        listener = new ClientListener(in, vista);
+    public void loopInicial() {
+        listener = new ClientListener(in, vista, this);
         listenerThread = new Thread(listener);
         listenerThread.start();
 
         while (!closing) {
-            if (!autenticated) {
-                vista.menuPrincipal();
-                ClientVista.ClientInput input = vista.lerInputGeral();
+            try {
+                if (!autenticated) {
+                    vista.menuPrincipal();
+                    ClientVista.ClientInput input = vista.lerInputGeral();
 
-                // Switch Case dos Comandos Iniciais
-                switch (input.inputInt) {
-                    case 1: // Login
-                        vista.mostrarInfo("Introduza o email e a password para iniciar o login.");
-                        email = vista.lerEmailValido("Email: ");
-                        password = vista.lerStringObrigatoria("Password: ");
-                        vista.mostrarInfo("Iniciar o login com email: " + email + " e password: " + password);
-                        try {
-                            user = new Client(email, password, null);
-                            Mensagem msg = new Mensagem(Mensagem.Tipo.LOGIN, user);
-                            out.writeObject(msg);
-                            out.flush();
+                    switch (input.inputInt) {
+                        case 1: // Login
+                            vista.mostrarInfo("Introduza o email e a password para iniciar o login.");
+                            this.email = vista.lerEmailValido("Email: ");
+                            this.password = vista.lerStringObrigatoria("Password: ");
+                            vista.mostrarInfo("Iniciar o login com email: " + this.email + " e password: " + this.password);
+                            try {
+                                user = new Client(0, this.email, this.password, null);
+                                Mensagem msg = new Mensagem(Mensagem.Tipo.LOGIN, user);
+                                out.writeObject(msg);
+                                out.flush();
 
-                            Mensagem response = listener.getResponse();
+                                Mensagem response = listener.getResponse(30);
 
-                            if (response != null && response.getTipo() == Mensagem.Tipo.LOGIN_SUCESSO) {
-                                vista.mostrarInfo("Login bem-sucedido!");
-                                Client autenticateduser = (Client) response.getPayload();
-                                this.user = autenticateduser;
-                                autenticated = true;
-                            } else {
-                                vista.mostrarErro("Login falhou. Credenciais inválidas ou tempo de resposta excedido.");
+                                if (response != null && response.getTipo() == Mensagem.Tipo.LOGIN_SUCESSO) {
+                                    vista.mostrarInfo("Login bem-sucedido!");
+                                    this.user = (Client) response.getPayload();
+                                    autenticated = true;
+                                } else {
+                                    vista.mostrarErro("Login falhou. Credenciais inválidas ou tempo de resposta excedido.");
+                                    this.email = null; // Clear credentials on failure
+                                    this.password = null;
+                                }
+                            } catch (IOException | InterruptedException e) {
+                                if (!closing) {
+                                    vista.mostrarErro("Erro durante o login: " + e.getMessage());
+                                }
                             }
-                        } catch (IOException | InterruptedException e) {
-                            vista.mostrarErro("Erro durante o login: " + e.getMessage());
-                        }
-                        break;
-                    case 2: // Registar
+                            break;
+                        case 2: // Registar
                         vista.menuRegisto();
                         ClientVista.ClientInput inputregistar = vista.lerInputGeral();
                         switch (inputregistar.inputInt) {
@@ -159,6 +170,7 @@ public class ClientMain {
                                         if (response != null && response.getTipo() == Mensagem.Tipo.LOGIN_SUCESSO) {
                                             Client autenticateduser = (Client) response.getPayload();
                                             this.user = autenticateduser;
+                                            user.setId(numero);
                                             autenticated = true;
                                         } else {
                                             vista.mostrarErro("Login automático falhou.");
@@ -354,7 +366,7 @@ public class ClientMain {
                                                 perguntas.add((String[]) item);
                                             }
                                         }
-                                        vista.mostrarListaPerguntas(perguntas);
+                                        vista.mostrarListaPerguntas(perguntas, filtro);
                                     }
                                 } else {
                                     vista.mostrarErro("Erro ao listar as perguntas.");
@@ -364,6 +376,75 @@ public class ClientMain {
                             }
                             break;
                         case 5:
+                            vista.mostrarInfo("Introduza o ID da pergunta expirada para ver as estatísticas:");
+                            int idPerguntaStats = vista.lerIntObrigatoria("ID da pergunta: ");
+                            try {
+                                Mensagem msg = new Mensagem(Mensagem.Tipo.VER_ESTATISTICAS, idPerguntaStats);
+                                out.writeObject(msg);
+                                out.flush();
+
+                                Mensagem response = listener.getResponse();
+                                if (response != null && response.getTipo() == Mensagem.Tipo.ESTATISTICAS_PERGUNTA) {
+                                    if (response.getPayload() instanceof List) {
+                                        List<?> rawList = (List<?>) response.getPayload();
+                                        List<String[]> estatisticas = new ArrayList<>();
+                                        for (Object item : rawList) {
+                                            if (item instanceof String[]) {
+                                                estatisticas.add((String[]) item);
+                                            }
+                                        }
+                                        vista.mostrarEstatisticasPergunta(estatisticas);
+                                    }
+                                } else {
+                                    vista.mostrarErro("Erro ao obter as estatísticas da pergunta.");
+                                }
+                            } catch (IOException | InterruptedException e) {
+                                vista.mostrarErro("Erro durante a comunicação: " + e.getMessage());
+                            }
+                            break;
+                        case 6:
+                            vista.mostrarInfo("Introduza o ID da pergunta expirada para exportar os resultados para CSV:");
+                            int idPerguntaExport = vista.lerIntObrigatoria("ID da pergunta: ");
+                            try {
+                                // Request 1: Get question details
+                                Mensagem msgDetalhes = new Mensagem(Mensagem.Tipo.VISUALIZAR_PERGUNTA, idPerguntaExport);
+                                out.writeObject(msgDetalhes);
+                                out.flush();
+                                Mensagem responseDetalhes = listener.getResponse();
+
+                                if (responseDetalhes != null && responseDetalhes.getTipo() == Mensagem.Tipo.DETALHES_PERGUNTA) {
+                                    String[] detalhesPergunta = (String[]) responseDetalhes.getPayload();
+
+                                    // Request 2: Get statistics (student answers)
+                                    Mensagem msgStats = new Mensagem(Mensagem.Tipo.VER_ESTATISTICAS, idPerguntaExport);
+                                    out.writeObject(msgStats);
+                                    out.flush();
+                                    Mensagem responseStats = listener.getResponse();
+
+                                    if (responseStats != null && responseStats.getTipo() == Mensagem.Tipo.ESTATISTICAS_PERGUNTA) {
+                                        if (responseStats.getPayload() instanceof List) {
+                                            List<?> rawList = (List<?>) responseStats.getPayload();
+                                            List<String[]> estatisticas = new ArrayList<>();
+                                            for (Object item : rawList) {
+                                                if (item instanceof String[]) {
+                                                    estatisticas.add((String[]) item);
+                                                }
+                                            }
+                                            exportarResultadosParaCSV(detalhesPergunta, estatisticas);
+                                        } else {
+                                            vista.mostrarErro("Formato de dados de estatísticas inválido.");
+                                        }
+                                    } else {
+                                        vista.mostrarErro("Não foi possível obter as respostas dos alunos para esta pergunta. A pergunta pode não ter expirado ou não ter respostas.");
+                                    }
+                                } else {
+                                    vista.mostrarErro("Não foi possível obter os detalhes da pergunta. Verifique o ID.");
+                                }
+                            } catch (IOException | InterruptedException e) {
+                                vista.mostrarErro("Erro durante a comunicação para exportação de CSV: " + e.getMessage());
+                            }
+                            break;
+                        case 7:
                             vista.mostrarInfo("O que deseja editar no seu perfil?");
                             vista.mostrarInfo("1. Nome");
                             vista.mostrarInfo("2. Email");
@@ -584,37 +665,188 @@ public class ClientMain {
                 } else {
                     closing = true;
                 }
+                }
+            } catch (Exception e) {
+                if (!closing) {
+                    vista.mostrarErro("Ocorreu um erro inesperado no loop principal: " + e.getMessage());
+                }
+            }
+        }
+        shutdown();
+    }
+
+    public synchronized void reconectar() {
+        // Fecha streams e socket antigos. Não chama shutdown() para evitar fechar a vista.
+        try {
+            if (out != null) out.close();
+            if (in != null) in.close();
+            if (principalSocket != null && !principalSocket.isClosed()) principalSocket.close();
+        } catch (IOException e) {
+            // Ignora erros ao fechar, pois a ligação já pode ter caído.
+        }
+
+        try {
+            ClientComunicacao clcom = new ClientComunicacao(InetAddress.getByName(dirIp), dirPort);
+            String[] serverDetails = clcom.requestPrincipalServer();
+
+            if (serverDetails != null) {
+                String newServerIp = serverDetails[0];
+                int newServerPort = Integer.parseInt(serverDetails[1]);
+
+                if (!newServerIp.equals(currentServerIp) || newServerPort != currentServerPort) {
+                    vista.mostrarAviso("Novo servidor principal encontrado. A ligar a " + newServerIp + ":" + newServerPort);
+                    currentServerIp = newServerIp;
+                    currentServerPort = newServerPort;
+                    if (tentarConexaoEAutenticacao()) {
+                        vista.mostrarInfo("Reconexão bem-sucedida!");
+                        // A thread do listener antigo vai morrer, a nova continua no loop principal.
+                    } else {
+                        vista.mostrarErro("Falha na autenticação com o novo servidor. A aplicação vai encerrar.");
+                        System.exit(1);
+                    }
+                } else {
+                    vista.mostrarAviso("O servidor é o mesmo. A tentar novamente em 20 segundos...");
+                    try {
+                        Thread.sleep(20000);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    if (tentarConexaoEAutenticacao()) {
+                        vista.mostrarInfo("Reconexão bem-sucedida!");
+                    } else {
+                        vista.mostrarErro("Falha na segunda tentativa de reconexão. A aplicação vai encerrar.");
+                        System.exit(1);
+                    }
+                }
+            } else {
+                vista.mostrarErro("Não foi possível obter um servidor principal. A aplicação vai encerrar.");
+                System.exit(1);
+            }
+        } catch (IOException e) {
+            vista.mostrarErro("Erro durante a reconexão: " + e.getMessage());
+            System.exit(1);
+        }
+    }
+
+    private boolean tentarConexaoEAutenticacao() {
+        try {
+            principalSocket = new Socket(currentServerIp, currentServerPort);
+            out = new ObjectOutputStream(principalSocket.getOutputStream());
+            in = new ObjectInputStream(principalSocket.getInputStream());
+
+            // Reinicia o listener com as novas streams
+            listener = new ClientListener(in, vista, this);
+            listenerThread = new Thread(listener);
+            listenerThread.start();
+
+            // Se estava autenticado, tenta reautenticar com as credenciais guardadas
+            if (autenticated && this.email != null && this.password != null) {
+                Mensagem msg = new Mensagem(Mensagem.Tipo.LOGIN, new Client(0, this.email, this.password, null));
+                out.writeObject(msg);
+                out.flush();
+
+                Mensagem response = listener.getResponse(30);
+                if (response != null && response.getTipo() == Mensagem.Tipo.LOGIN_SUCESSO) {
+                    this.user = (Client) response.getPayload();
+                    return true; // Sucesso
+                } else {
+                    autenticated = false; // Falha na reautenticação
+                    return false;
+                }
+            }
+            // Se não estava autenticado, a reconexão já é um sucesso.
+            return true;
+        } catch (IOException | InterruptedException e) {
+            vista.mostrarErro("Falha ao tentar conectar e autenticar: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private void exportarResultadosParaCSV(String[] detalhes, List<String[]> estatisticas) {
+
+        String filenameRaw = vista.lerStringObrigatoria("Introduza o nome do ficheiro CSV (ex: resultados.csv): ");
+        String filename;
+
+        if (!filenameRaw.toLowerCase().endsWith(".csv")) {
+            filename = filenameRaw + ".csv";
+        } else {
+            filename = filenameRaw;
+        }
+
+        File csvDir = new File(Pasta_CSV);
+
+        if (!csvDir.exists()) {
+            if (csvDir.mkdirs()) {
+                vista.mostrarInfo("Pasta 'csv' criada com sucesso.");
+            } else {
+                vista.mostrarErro("ERRO: Não foi possível criar a pasta 'csv'. A exportação não será efetuada no local desejado.");
+                return;
             }
         }
 
-        // Finalização
-        closeResources();
+        // 3. Criar o objeto File que aponta para o ficheiro dentro da pasta 'csv'
+        File finalFile = new File(csvDir, filename);
+        String fullPath = finalFile.getAbsolutePath();
+
+        try (FileWriter writer = new FileWriter(finalFile)) {
+            String enunciado = detalhes[2];
+            String opcoesStr = detalhes[3];
+            String dataInicio = detalhes[4];
+            String dataFim = detalhes[5];
+            int opcaoCorretaIdx = Integer.parseInt(detalhes[6]);
+
+            String[] inicioParts = dataInicio.split(" ");
+            String[] fimParts = dataFim.split(" ");
+            String[] dataParts = inicioParts[0].split("/");
+            String dia = dataParts[2] + "-" + dataParts[1] + "-" + dataParts[0];
+            String horaInicial = inicioParts[1];
+            String horaFinal = fimParts[1];
+            char opcaoCorretaLetra = (char) ('a' + opcaoCorretaIdx);
+
+            writer.append("\"dia\";\"hora inicial\";\"hora final\";\"enunciado da pergunta\";\"opção certa\"\n");
+            writer.append(String.format("\"%s\";\"%s\";\"%s\";\"%s\";\"%c\"\n", dia, horaInicial, horaFinal, enunciado, opcaoCorretaLetra));
+            writer.append("\"opção\";\"texto da opção\"\n");
+
+            String[] opcoes = opcoesStr.substring(1, opcoesStr.length() - 1).split(", ");
+            for (int i = 0; i < opcoes.length; i++) {
+                char letraOpcao = (char) ('a' + i);
+                writer.append(String.format("\"%c\";\"%s\"\n", letraOpcao, opcoes[i]));
+            }
+
+            writer.append("\"número de estudante\";\"nome\";\"e-mail\";\"resposta\"\n");
+
+            for (int i = 2; i < estatisticas.size(); i++) {
+                String[] resposta = estatisticas.get(i);
+                String numEstudante = resposta[0];
+                String nomeEstudante = resposta[1];
+                String emailEstudante = resposta[2];
+                String respostaLetra = resposta[3];
+                writer.append(String.format("\"%s\";\"%s\";\"%s\";\"%s\"\n", numEstudante, nomeEstudante, emailEstudante, respostaLetra));
+            }
+            vista.mostrarInfo("Resultados exportados com sucesso para " + fullPath);
+        } catch (IOException e) {
+            vista.mostrarErro("Ocorreu um erro ao escrever o ficheiro CSV: " + e.getMessage());
+        } catch (Exception e) {
+            vista.mostrarErro("Ocorreu um erro inesperado durante a exportação para CSV: " + e.getMessage());
+        }
     }
 
-    // Fecha o socket TCP e o scanner da Vista.
-
-    private void closeResources() {
-
+    private void shutdown() {
+        closing = true;
         if (listener != null) {
             listener.stopRunning();
-            try {
-                // Interrompe a thread para desbloquear o `poll` ou `put`
-                if (listenerThread != null) {
-                    listenerThread.interrupt();
-                    listenerThread.join(100);
-                }
-            } catch (InterruptedException ignored) {}
         }
-
+        if (listenerThread != null) {
+            listenerThread.interrupt();
+        }
         try {
             if (out != null) out.close();
             if (in != null) in.close();
             if (principalSocket != null && !principalSocket.isClosed()) {
                 principalSocket.close();
-                vista.mostrarInfo("Ligação TCP com o servidor fechada.");
             }
         } catch (IOException e) {
-            vista.mostrarErro("Erro ao fechar a ligação TCP: " + e.getMessage());
+            // Ignora erros durante o encerramento
         }
         vista.fecharScanner();
     }
@@ -630,12 +862,15 @@ public class ClientMain {
 
         // Cria o Socket e a Vista primeiro
 
-        Socket principalSocket = null;
+        String dirIpStr = args[0];
+        String dirPortStr = args[1];
         ClientVista vista = new ClientVista();
+        Socket principalSocket = null;
+        ClientMain client = null;
 
         try {
-            InetAddress dirIp = InetAddress.getByName(args[0]);
-            int dirPort = Integer.parseInt(args[1]);
+            InetAddress dirIp = InetAddress.getByName(dirIpStr);
+            int dirPort = Integer.parseInt(dirPortStr);
 
             ClientComunicacao clcom = new ClientComunicacao(dirIp, dirPort);
 
@@ -648,36 +883,31 @@ public class ClientMain {
 
                 System.out.println("Servidor Principal encontrado: " + serverIp + ":" + serverTcpPort);
 
-                // Ligação TCP ao Servidor Principal
-                try {
-                    principalSocket = new Socket(serverIp, serverTcpPort);
-                    System.out.println("Ligação TCP estabelecida: " + serverIp + ":" + serverTcpPort);
+                principalSocket = new Socket(serverIp, serverTcpPort);
+                System.out.println("Ligação TCP estabelecida: " + serverIp + ":" + serverTcpPort);
 
-                    // Inicia o Loop Principal do Cliente
-                    ClientMain client = new ClientMain(vista, principalSocket);
-                    client.loopInicial();
-
-                } catch (Exception e) {
-                    vista.mostrarErro("Erro ao ligar ao Servidor Principal via TCP: " + e.getMessage());
-                }
+                client = new ClientMain(vista, principalSocket, dirIpStr, dirPort, serverIp, serverTcpPort);
+                client.loopInicial();
 
             } else {
                 System.out.println("Não foi possível obter um servidor principal. O cliente vai encerrar.");
             }
 
         } catch (UnknownHostException e) {
-            vista.mostrarErro("O endereço IP/Host '" + args[0] + "' é inválido ou desconhecido.");
+            vista.mostrarErro("O endereço IP/Host '" + dirIpStr + "' é inválido ou desconhecido.");
         } catch (NumberFormatException e) {
-            vista.mostrarErro("O porto fornecido ('" + args[1] + "') não é um número válido.");
+            vista.mostrarErro("O porto fornecido ('" + dirPortStr + "') não é um número válido.");
+        } catch (IOException e) {
+            vista.mostrarErro("Erro de comunicação inicial: " + e.getMessage());
         } finally {
-            // Fecha o Socket e o Scanner se estiverem abertos depois de haver um erro na função main
-            if (principalSocket != null && !principalSocket.isClosed()) {
-                try {
-                    principalSocket.close();
-                } catch (IOException ignored) {}
+            if (client == null) { // Se o cliente nem chegou a ser criado, fecha os recursos manualmente
+                if (principalSocket != null && !principalSocket.isClosed()) {
+                    try {
+                        principalSocket.close();
+                    } catch (IOException ignored) {}
+                }
+                vista.fecharScanner();
             }
-            vista.fecharScanner();
         }
     }
-
 }
