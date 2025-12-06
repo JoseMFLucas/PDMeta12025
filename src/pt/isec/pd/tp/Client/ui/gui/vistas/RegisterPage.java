@@ -52,18 +52,14 @@ public class RegisterPage implements InitializableController {
         if (rbEstudante.isSelected()) {
             String numero = txtNumero.getText();
             if (!nome.isEmpty() && !email.isEmpty() && !pass.isEmpty() && !numero.isEmpty()) {
-                Client newClient = new Client(email, pass, nome);
-                newClient.setNumero(Integer.parseInt(numero));
-                newClient.setTipo(Client.Tipo.ESTUDANTE);
-                clientManager.registar(newClient);
+                String [] info = new String[]{numero, nome, email, pass};
+                clientManager.registar("ESTUDANTE",info);
             }
         } else {
             String codigo = txtCodigo.getText();
             if (!nome.isEmpty() && !email.isEmpty() && !pass.isEmpty() && !codigo.isEmpty()) {
-                Client newClient = new Client(email, pass, nome);
-                newClient.setCodigoRegisto(codigo);
-                newClient.setTipo(Client.Tipo.DOCENTE);
-                clientManager.registar(newClient);
+                String [] info = new String[]{nome, email, pass, codigo};
+                clientManager.registar("DOCENTE", info);
             }
         }
     }
