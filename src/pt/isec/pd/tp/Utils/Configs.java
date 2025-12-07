@@ -2,6 +2,10 @@ package pt.isec.pd.tp.Utils;
 
 public class Configs {
 
+    public static final String Pasta_CSV = "../../../../../../csv";
+
+    public static final String Pasta_CSV_Vista = "../../../../../../../../csv";
+
     // Endereço e porto Multicast para heartbeats dos servidores
     public static final int MULTICAST_PORT = 3030;
 
