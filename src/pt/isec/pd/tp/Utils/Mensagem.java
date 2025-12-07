@@ -27,7 +27,6 @@ public class Mensagem implements Serializable {
         SUBMETER_RESPOSTA,
         LISTAR_PERGUNTAS_RESPONDIDAS,
         LISTA_PERGUNTAS_RESPONDIDAS,
-        PEDIR_LISTA_CLIENTES,
         LOGOUT,
         EXIT,
 
@@ -39,7 +38,6 @@ public class Mensagem implements Serializable {
         OPERACAO_SUCESSO,
         OPERACAO_FALHOU,
         LISTA_PERGUNTAS,
-        LISTA_CLIENTES,
         DETALHES_PERGUNTA, // Para o estudante responder
         ESTATISTICAS_PERGUNTA,
         FICHEIRO_CSV,
