@@ -1,28 +1,63 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.geometry.Insets?>
-<?import javafx.scene.control.*?>
-<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ChoiceBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.text.Text?>
+<?import javafx.scene.text.Font?>
 
-<VBox alignment="CENTER" spacing="10.0" xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1" fx:controller="pt.isec.pd.tp.Client.ui.gui.vistas.ResponderPerguntaPane">
+<VBox alignment="TOP_CENTER" spacing="15.0"
+      style="-fx-background-color: #f4f4f9; -fx-font-family: 'Arial', sans-serif;"
+      xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="pt.isec.pd.tp.Client.ui.gui.vistas.ResponderPerguntaPane">
+
     <padding>
-        <Insets bottom="20.0" left="20.0" right="20.0" top="20.0" />
+        <Insets bottom="40.0" left="40.0" right="40.0" top="40.0" />
     </padding>
 
-    <Label text="Responder a Pergunta" style="-fx-font-size: 18px; -fx-font-weight: bold;" />
+    <Label text="Responder a Pergunta"
+           style="-fx-font-size: 28px; -fx-font-weight: bold; -fx-text-fill: #333333; -fx-padding: 0 0 10 0;" />
 
-    <HBox spacing="10" alignment="CENTER">
-        <TextField fx:id="tfCodigo" promptText="Insira o código da pergunta" />
-        <Button text="Procurar Pergunta" onAction="#onProcurar" />
+    <HBox spacing="15.0" alignment="CENTER" style="-fx-padding: 10 0 10 0;">
+        <TextField fx:id="txtCodigo" promptText="Insira o código da pergunta"
+                   style="-fx-font-size: 14px; -fx-pref-height: 40px; -fx-background-radius: 5; -fx-border-color: #cccccc; -fx-border-width: 1; -fx-border-radius: 5; -fx-padding: 0 10 0 10; -fx-pref-width: 200px;" />
+
+        <Button fx:id="btnProcurar" text="Procurar" onAction="#onProcurar"
+                style="-fx-background-color: #007bff; -fx-text-fill: white; -fx-font-size: 16px; -fx-font-weight: bold; -fx-pref-width: 100px; -fx-pref-height: 40px; -fx-background-radius: 8; -fx-cursor: hand;" />
     </HBox>
 
-    <VBox fx:id="perguntaContainer" spacing="10.0" visible="false" managed="false">
-        <Label fx:id="lblEnunciado" style="-fx-font-weight: bold;" />
-        <VBox fx:id="opcoesRespostaContainer" spacing="5.0" />
-        <Button text="Submeter Resposta" onAction="#onSubmit" />
+    <Separator style="-fx-pref-width: 350px;" />
+
+    <VBox fx:id="questionBox" alignment="CENTER" spacing="15.0" visible="false" managed="false" style="-fx-pref-width: 450px;">
+
+        <Label text="Enunciado da Pergunta:" style="-fx-font-weight: bold; -fx-text-fill: #333333; -fx-font-size: 16px;"/>
+        <Label fx:id="lblEnunciado" style="-fx-font-weight: bold; -fx-text-fill: #007bff; -fx-font-size: 16px;" />
+
+        <Separator />
+
+        <Label text="Opções de Resposta:" style="-fx-font-weight: bold; -fx-text-fill: #007bff; -fx-font-size: 16px;"/>
+        <VBox fx:id="optionsDisplayContainer" alignment="CENTER" spacing="8.0" />
+
+        <Separator />
+
+        <HBox spacing="10.0" alignment="CENTER">
+            <Label text="A sua resposta:" style="-fx-font-size: 14px; -fx-font-weight: bold;"/>
+            <ChoiceBox fx:id="choiceBoxRespostas" prefWidth="150"
+                       style="-fx-font-size: 14px; -fx-pref-height: 30px; -fx-background-radius: 5; -fx-border-color: #cccccc; -fx-border-width: 1; -fx-border-radius: 5;" />
+        </HBox>
+
+        <Button fx:id="btnSubmeter" text="Submeter Resposta" onAction="#onSubmeter" disable="true"
+                style="-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-size: 16px; -fx-font-weight: bold; -fx-pref-width: 250px; -fx-pref-height: 45px; -fx-background-radius: 8; -fx-cursor: hand;"/>
     </VBox>
 
-    <Button text="Voltar" onAction="#onBack" />
+    <HBox spacing="10" alignment="CENTER" style="-fx-padding: 30 0 0 0;">
+        <Button text="Voltar" onAction="#onBack"
+                style="-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-size: 16px; -fx-font-weight: bold; -fx-pref-width: 120px; -fx-pref-height: 40px; -fx-background-radius: 8; -fx-cursor: hand;" />
+    </HBox>
 
 </VBox>
