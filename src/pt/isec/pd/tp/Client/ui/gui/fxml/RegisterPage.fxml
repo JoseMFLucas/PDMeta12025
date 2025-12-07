@@ -4,30 +4,53 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
+<?import javafx.scene.layout.BorderPane?>
 
-<VBox alignment="CENTER" spacing="10.0" xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1" fx:controller="pt.isec.pd.tp.Client.ui.gui.vistas.RegisterPage">
+<BorderPane style="-fx-background-color: #f4f4f9; -fx-font-family: 'Arial', sans-serif;"
+            xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="pt.isec.pd.tp.Client.ui.gui.vistas.RegisterPage">
+
     <padding>
-        <Insets bottom="20.0" left="20.0" right="20.0" top="20.0" />
+        <Insets bottom="30.0" left="30.0" right="30.0" top="30.0" />
     </padding>
 
-    <Label text="Registar" />
+    <center>
+        <VBox alignment="CENTER" spacing="15.0">
 
-    <HBox alignment="CENTER" spacing="10.0">
-        <RadioButton fx:id="rbEstudante" onAction="#onUserTypeSelect" text="Estudante">
-            <toggleGroup>
-                <ToggleGroup fx:id="userTypeGroup" />
-            </toggleGroup>
-        </RadioButton>
-        <RadioButton fx:id="rbDocente" onAction="#onUserTypeSelect" text="Docente" toggleGroup="$userTypeGroup" />
-    </HBox>
+            <Label text="Registar Novo Utilizador"
+                   style="-fx-font-size: 28px; -fx-font-weight: bold; -fx-text-fill: #333333; -fx-padding: 0 0 10 0;" />
 
-    <TextField fx:id="txtNumero" managed="false" promptText="Número de Estudante" visible="false" />
-    <TextField fx:id="txtNome" promptText="Nome" />
-    <TextField fx:id="txtEmail" promptText="Email" />
-    <PasswordField fx:id="txtPass" promptText="Password" />
-    <TextField fx:id="txtCodigo" managed="false" promptText="Código de Docente" visible="false" />
+            <HBox alignment="CENTER" spacing="20.0" style="-fx-padding: 10 0;">
+                <RadioButton fx:id="rbEstudante" onAction="#onUserTypeSelect" text="Estudante"
+                             style="-fx-font-size: 14px; -fx-text-fill: #333333;">
+                    <toggleGroup>
+                        <ToggleGroup fx:id="userTypeGroup" />
+                    </toggleGroup>
+                </RadioButton>
+                <RadioButton fx:id="rbDocente" onAction="#onUserTypeSelect" text="Docente" toggleGroup="$userTypeGroup"
+                             style="-fx-font-size: 14px; -fx-text-fill: #333333;" />
+            </HBox>
+
+            <TextField fx:id="txtNumero" managed="false" promptText="Número de Estudante" visible="false"
+                       style="-fx-font-size: 14px; -fx-pref-height: 40px; -fx-background-radius: 5; -fx-border-color: #cccccc; -fx-border-width: 1; -fx-border-radius: 5; -fx-padding: 0 10 0 10; -fx-pref-width: 250px;" />
+            <TextField fx:id="txtNome" promptText="Nome"
+                       style="-fx-font-size: 14px; -fx-pref-height: 40px; -fx-background-radius: 5; -fx-border-color: #cccccc; -fx-border-width: 1; -fx-border-radius: 5; -fx-padding: 0 10 0 10; -fx-pref-width: 250px;" />
+            <TextField fx:id="txtEmail" promptText="Email"
+                       style="-fx-font-size: 14px; -fx-pref-height: 40px; -fx-background-radius: 5; -fx-border-color: #cccccc; -fx-border-width: 1; -fx-border-radius: 5; -fx-padding: 0 10 0 10; -fx-pref-width: 250px;" />
+            <PasswordField fx:id="txtPass" promptText="Password"
+                           style="-fx-font-size: 14px; -fx-pref-height: 40px; -fx-background-radius: 5; -fx-border-color: #cccccc; -fx-border-width: 1; -fx-border-radius: 5; -fx-padding: 0 10 0 10; -fx-pref-width: 250px;" />
+            <TextField fx:id="txtCodigo" managed="false" promptText="Código de Docente" visible="false"
+                       style="-fx-font-size: 14px; -fx-pref-height: 40px; -fx-background-radius: 5; -fx-border-color: #cccccc; -fx-border-width: 1; -fx-border-radius: 5; -fx-padding: 0 10 0 10; -fx-pref-width: 250px;" />
 
 
-    <Button fx:id="btnRegistar" onAction="#onRegister" text="Registar" />
-    <Button fx:id="btnVoltar" onAction="#onBack" text="Voltar" />
-</VBox>
+            <Button fx:id="btnRegistar" onAction="#onRegister" text="Registar"
+                    style="-fx-background-color: #007bff; -fx-text-fill: white; -fx-font-size: 16px; -fx-font-weight: bold; -fx-pref-width: 250px; -fx-pref-height: 45px; -fx-background-radius: 8; -fx-cursor: hand; -fx-padding: 0 0 5 0;" />
+            <Button fx:id="btnVoltar" onAction="#onBack" text="Voltar"
+                    style="-fx-background-color: transparent; -fx-text-fill: #6c757d; -fx-font-size: 12px; -fx-underline: true; -fx-cursor: hand;" />
+        </VBox>
+    </center>
+
+    <bottom>
+
+    </bottom>
+</BorderPane>
