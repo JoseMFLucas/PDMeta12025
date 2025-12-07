@@ -182,7 +182,7 @@ public class ClientVista {
     }
 
     public void mostrarPerguntaParaEstudante(String[] detalhes) {
-        if (detalhes == null || detalhes.length < 3) {
+        if (detalhes == null || detalhes.length < 5) {
             mostrarErro("Não foi possível obter os detalhes da pergunta.");
             return;
         }
@@ -198,6 +198,10 @@ public class ClientVista {
         for (int i = 0; i < opcoes.length; i++) {
             System.out.println("  " + (i + 1) + ". " + opcoes[i]);
         }
+
+        System.out.println("Data Início:" + detalhes[3]);
+        System.out.println("Data Fim:" + detalhes[4]);
+
         System.out.println("---------------------------\n");
     }
 
