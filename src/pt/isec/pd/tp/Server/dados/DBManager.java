@@ -235,6 +235,26 @@ public class DBManager {
         return -1;
     }
 
+    public String getUserName(String email, String userType) {
+        if (conn == null) {
+            return null;
+        }
+        String tableName = userType.equals("DOCENTE") ? "Docente" : "Estudante";
+        String sql = "SELECT nome FROM " + tableName + " WHERE email = ?";
+
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, email);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString(1);
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Erro ao obter nome do utilizador: " + e.getMessage());
+        }
+        return null;
+    }
+
     public boolean registarEstudante(String[] msg) {
         if (conn == null || msg.length != 4) {
             return false;
@@ -772,7 +792,7 @@ public class DBManager {
         String sqlRespostas = "SELECT e.numero_estudante, e.nome, e.email, r.opcao_escolhida_indice, r.data_hora_realizacao, o.texto as resposta_texto " +
                 "FROM Resposta r " +
                 "JOIN Estudante e ON r.numero_estudante = e.numero_estudante " +
-                "JOIN Opcao o ON r.idpergunta = o.idpergunta AND r.opcao_escolhida_indice = o.indice " +
+                "LEFT JOIN Opcao o ON r.idpergunta = o.idpergunta AND (r.opcao_escolhida_indice + 1) = o.indice " +
                 "WHERE r.idpergunta = ?";
 
         try {
@@ -843,11 +863,12 @@ public class DBManager {
         }
 
         List<String[]> perguntasRespondidas = new ArrayList<>();
-        String sql = "SELECT p.enunciado, r.data_hora_realizacao, r.opcao_escolhida_indice, r.esta_certa " +
-                     "FROM Resposta r " +
-                     "JOIN Pergunta p ON r.idpergunta = p.idpergunta " +
-                     "WHERE r.numero_estudante = ? " +
-                     "ORDER BY r.data_hora_realizacao DESC";
+        String sql = "SELECT p.enunciado, r.data_hora_realizacao, r.opcao_escolhida_indice, r.esta_certa, o.texto " +
+                "FROM Resposta r " +
+                "JOIN Pergunta p ON r.idpergunta = p.idpergunta " +
+                "JOIN Opcao o ON r.idpergunta = o.idpergunta AND r.opcao_escolhida_indice = (o.indice - 1) " + // Novo JOIN
+                "WHERE r.numero_estudante = ? AND REPLACE(p.data_hora_fim, '/', '-') < DATETIME('now')" +
+                "ORDER BY r.data_hora_realizacao DESC";
 
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setInt(1, idEstudante);
@@ -856,6 +877,7 @@ public class DBManager {
                     String[] resposta = {
                             rs.getString("enunciado"),
                             rs.getString("data_hora_realizacao"),
+                            rs.getString("texto"),
                             String.valueOf(rs.getInt("opcao_escolhida_indice")),
                             rs.getBoolean("esta_certa") ? "Correta" : "Incorreta"
                     };
@@ -873,12 +895,14 @@ public class DBManager {
     public String[] obterPerguntaPorCodigo(String codigo) {
         if (conn == null) return null;
 
-        String sql = "SELECT idpergunta, enunciado FROM Pergunta WHERE codigo_acesso = ? AND datetime(replace(data_hora_inicio, '/', '-')) <= datetime('now', 'localtime') AND datetime(replace(data_hora_fim, '/', '-')) >= datetime('now', 'localtime')";
+        String sql = "SELECT idpergunta, enunciado, data_hora_inicio, data_hora_fim FROM Pergunta WHERE codigo_acesso = ? AND datetime(replace(data_hora_inicio, '/', '-')) <= datetime('now', 'localtime') AND datetime(replace(data_hora_fim, '/', '-')) >= datetime('now', 'localtime')";
         String sqlOpcoes = "SELECT texto FROM Opcao WHERE idpergunta = ? ORDER BY indice ASC";
 
         try {
             int idPergunta;
             String enunciado;
+            String dataHoraInicio;
+            String dataHoraFim;
             List<String> opcoesList = new ArrayList<>();
 
             try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -887,6 +911,8 @@ public class DBManager {
                     if (rs.next()) {
                         idPergunta = rs.getInt("idpergunta");
                         enunciado = rs.getString("enunciado");
+                        dataHoraInicio = rs.getString("data_hora_inicio");
+                        dataHoraFim = rs.getString("data_hora_fim");
                     } else {
                         return null; // Nenhuma pergunta ativa encontrada com este código
                     }
@@ -903,7 +929,7 @@ public class DBManager {
             }
 
             String opcoesString = Arrays.toString(opcoesList.toArray(new String[0]));
-            return new String[]{String.valueOf(idPergunta), enunciado, opcoesString};
+            return new String[]{String.valueOf(idPergunta), enunciado, opcoesString, dataHoraInicio, dataHoraFim};
 
         } catch (SQLException e) {
             System.err.println("Erro ao obter pergunta por código: " + e.getMessage());
@@ -989,31 +1015,66 @@ public class DBManager {
         String campo = dadosEdicao[1];
         String novoValor = dadosEdicao[2];
 
-        String sqlUpdate = "UPDATE Estudante SET " + campo + " = ? WHERE numero_estudante = ?";
+        String sqlUpdateEstudante = "UPDATE Estudante SET " + campo + " = ? WHERE numero_estudante = ?";
 
+        String sqlUpdateResposta = "UPDATE Resposta SET " + campo + " = ? WHERE numero_estudante = ?";
+
+        Object valorParam;
         try {
-            try (PreparedStatement pstmt = conn.prepareStatement(sqlUpdate)) {
-                Object valorParam;
-                if (campo.equals("numero_estudante")) {
-                    valorParam = Integer.parseInt(novoValor);
-                    pstmt.setInt(1, (Integer) valorParam);
-                } else {
-                    valorParam = novoValor;
-                    pstmt.setString(1, (String) valorParam);
-                }
-                pstmt.setInt(2, idEstudante);
-                int linhasAfetadas = pstmt.executeUpdate();
-                if(linhasAfetadas > 0) {
-                    updateDB(sqlUpdate, valorParam, idEstudante);
-                    return true;
-                }
+            if (campo.equals("numero_estudante")) {
+                valorParam = Integer.parseInt(novoValor);
+            } else {
+                valorParam = novoValor;
             }
-        } catch (SQLException | NumberFormatException e) {
-            System.err.println("Erro ao editar perfil do estudante: " + e.getMessage());
+        } catch (NumberFormatException e) {
+            System.err.println("Erro de formatação do novo valor para 'numero_estudante'.");
             return false;
         }
 
-        return false;
+
+        boolean sucessoEstudante = false;
+
+
+        try (PreparedStatement pstmtEstudante = conn.prepareStatement(sqlUpdateEstudante)) {
+
+            if (valorParam instanceof Integer) {
+                pstmtEstudante.setInt(1, (Integer) valorParam);
+            } else {
+                pstmtEstudante.setString(1, (String) valorParam);
+            }
+            pstmtEstudante.setInt(2, idEstudante);
+
+            int linhasAfetadasEstudante = pstmtEstudante.executeUpdate();
+
+            if (linhasAfetadasEstudante > 0) {
+                updateDB(sqlUpdateEstudante, valorParam, idEstudante);
+                sucessoEstudante = true;
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Erro ao editar perfil do estudante (Tabela Estudante): " + e.getMessage());
+            return false;
+        }
+
+        if (sucessoEstudante && campo.equals("numero_estudante")) {
+
+            try (PreparedStatement pstmtResposta = conn.prepareStatement(sqlUpdateResposta)) {
+
+                pstmtResposta.setInt(1, (Integer) valorParam);
+                pstmtResposta.setInt(2, idEstudante);
+
+                int linhasAfetadasResposta = pstmtResposta.executeUpdate();
+
+                if (linhasAfetadasResposta > 0) {
+                    updateDB(sqlUpdateResposta, valorParam, idEstudante);
+                }
+
+            } catch (SQLException e) {
+                System.err.println("Aviso: Falha ao atualizar FK em Resposta. Estudante atualizado. Erro: " + e.getMessage());
+            }
+        }
+
+        return sucessoEstudante;
     }
 
     private void updateDB(String sql, Object... params) {
