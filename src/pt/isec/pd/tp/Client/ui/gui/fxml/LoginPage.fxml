@@ -38,7 +38,7 @@
             <VBox alignment="BOTTOM_RIGHT" spacing="2.0">
                 <Label text="Trabalho elaborado por:"
                        style="-fx-font-size: 12px; -fx-text-fill: #6c757d; -fx-font-weight: bold;" />
-                <Label text="Nome do Aluno 1 (Num XXXXX)"
+                <Label text="José Miguel Fernandes Lucas (2022127015)"
                        style="-fx-font-size: 12px; -fx-text-fill: #6c757d;" />
                 <Label text="Nuno Miguel Carvalho Queirós (2017019570)"
                        style="-fx-font-size: 12px; -fx-text-fill: #6c757d;" />

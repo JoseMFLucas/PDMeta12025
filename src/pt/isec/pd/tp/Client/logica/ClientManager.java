@@ -1,6 +1,7 @@
 package pt.isec.pd.tp.Client.logica;
 
 import pt.isec.pd.tp.Client.Client;
+import pt.isec.pd.tp.Client.ui.ClientJFX;
 import pt.isec.pd.tp.Utils.Mensagem;
 import pt.isec.pd.tp.Utils.Pergunta;
 import pt.isec.pd.tp.Utils.Resposta;
@@ -37,6 +38,7 @@ public class ClientManager {
     private List<Resposta> respostas;
     private Pergunta perguntaAtiva;
     private Pergunta perguntaParaEditar;
+    private Client client;
 
     private Socket socket;
     private ObjectOutputStream out;
@@ -45,6 +47,7 @@ public class ClientManager {
     private String serverIp;
     private int serverPort;
     private volatile boolean loggingOut = false;
+    private ClientJFX clientJFX;
 
     public ClientManager() {
         this.pcs = new PropertyChangeSupport(this);
@@ -54,10 +57,11 @@ public class ClientManager {
         this.respostas = new ArrayList<>();
     }
 
-    public void start(String ip, int port) {
+    public void start(String ip, int port, ClientJFX manager) {
         this.serverIp = ip;
         this.serverPort = port;
         this.loggingOut = false;
+        this.clientJFX = manager;
         try {
             this.socket = new Socket(ip, port);
             this.out = new ObjectOutputStream(socket.getOutputStream());
@@ -74,14 +78,27 @@ public class ClientManager {
                         System.out.println("Conexão fechada para logout.");
                     } else {
                         System.err.println("Ligação perdida: " + e.getMessage());
-                        pcs.firePropertyChange(PROP_CLOSE_APP, false, true);
+
+                            try {
+                                Thread.sleep(10000);
+                            }
+                            catch (InterruptedException ex) {
+                                Thread.currentThread().interrupt();
+                            }
+                            if(manager.getConection())
+                                ReLogin(client);
+                            else{
+                                System.out.println("closing client");
+                                pcs.firePropertyChange(PROP_CLOSE_APP, false, true);
+                            }
+                        }
                     }
-                }
             });
             listenerThread.start();
+
         } catch (IOException e) {
-            pcs.firePropertyChange(PROP_MSG, null, "Erro de conexão: " + e.getMessage());
-            pcs.firePropertyChange(PROP_CLOSE_APP, false, true);
+                pcs.firePropertyChange(PROP_MSG, null, "Erro de conexão: " + e.getMessage());
+                pcs.firePropertyChange(PROP_CLOSE_APP, false, true);
         }
     }
 
@@ -201,15 +218,28 @@ public class ClientManager {
     public void login(String email, String password) {
         if (socket == null || socket.isClosed()) {
             if (serverIp != null && serverPort > 0) {
-                start(serverIp, serverPort);
+                start(serverIp, serverPort, clientJFX);
             } else {
                 pcs.firePropertyChange(PROP_MSG_ERRO, null, "Dados de conexão não encontrados. Reinicie a aplicação.");
                 return;
             }
         }
-        Client client = new Client(email, password, null);
+        this.client = new Client(email, password, null);
         enviarMensagem(new Mensagem(Mensagem.Tipo.LOGIN, client));
     }
+
+    public void ReLogin(Client user){
+        if (socket == null || socket.isClosed()) {
+            if (serverIp != null && serverPort > 0) {
+                start(serverIp, serverPort, clientJFX);
+            } else {
+                pcs.firePropertyChange(PROP_MSG_ERRO, null, "Dados de conexão não encontrados. Reinicie a aplicação.");
+                return;
+            }
+        }
+        enviarMensagem(new Mensagem(Mensagem.Tipo.LOGIN, user));
+    }
+
 
     public void registar(String tipoC, String[] info) {
         Mensagem.Tipo tipo = tipoC.equalsIgnoreCase(Client.Tipo.DOCENTE.toString()) ? Mensagem.Tipo.REGISTO_DOCENTE : Mensagem.Tipo.REGISTO_ESTUDANTE;

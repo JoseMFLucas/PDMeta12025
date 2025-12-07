@@ -8,10 +8,6 @@ import javafx.scene.layout.Pane;
 import javafx.scene.layout.StackPane;
 import javafx.stage.Stage;
 import pt.isec.pd.tp.Client.logica.ClientManager;
-import pt.isec.pd.tp.Client.logica.ClientState;
-import pt.isec.pd.tp.Client.ui.gui.vistas.*;
-import pt.isec.pd.tp.Utils.Pergunta;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -19,8 +15,13 @@ import java.util.List;
 public class MainPane extends StackPane {
     private final ClientManager clientManager;
     private final List<Node> views = new ArrayList<>();
+    private final String dirip;
+    private final int dirport;
 
-    public MainPane(ClientManager clientManager) {
+
+    public MainPane(ClientManager clientManager, String dirIp, int dirPort) {
+        this.dirip = dirIp;
+        this.dirport = dirPort;
         this.clientManager = clientManager;
         createViews();
         registerHandlers();
@@ -76,6 +77,7 @@ public class MainPane extends StackPane {
                 } else if (evt.getPropertyName().equals(ClientManager.PROP_MSG_SUCESSO) || evt.getPropertyName().equals(ClientManager.PROP_MSG_ERRO)) {
                     showAlert(evt.getPropertyName(), (String) evt.getNewValue());
                 } else if (evt.getPropertyName().equals(ClientManager.PROP_CLOSE_APP)) {
+
                     Stage stage = (Stage) this.getScene().getWindow();
                     stage.close();
                 }
