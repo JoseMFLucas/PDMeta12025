@@ -2,19 +2,49 @@
 
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ChoiceBox?>
 <?import javafx.scene.control.Label?>
-<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.TableColumn?>
 <?import javafx.scene.layout.VBox?>
 
-<VBox alignment="CENTER" spacing="10.0" xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1" fx:controller="pt.isec.pd.tp.Client.ui.gui.vistas.ListarPerguntasPane">
+<VBox alignment="TOP_CENTER" spacing="15.0"
+      style="-fx-background-color: #f4f4f9; -fx-font-family: 'Arial', sans-serif;"
+      xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="pt.isec.pd.tp.Client.ui.gui.vistas.ListarPerguntasPane">
+
     <padding>
-        <Insets bottom="20.0" left="20.0" right="20.0" top="20.0" />
+        <Insets bottom="30.0" left="30.0" right="30.0" top="30.0" />
     </padding>
 
-    <Label text="Minhas Perguntas" style="-fx-font-size: 18px; -fx-font-weight: bold;" />
+    <Label text="Minhas Perguntas (Docente)"
+           style="-fx-font-size: 28px; -fx-font-weight: bold; -fx-text-fill: #333333; -fx-padding: 0 0 10 0;" />
 
-    <ListView fx:id="listViewPerguntas" />
+    <ChoiceBox fx:id="choiceBoxFiltro"
+               style="-fx-font-size: 14px; -fx-pref-height: 35px; -fx-pref-width: 250px; -fx-background-radius: 5; -fx-border-color: #cccccc; -fx-border-width: 1; -fx-border-radius: 5;" />
 
-    <Button text="Voltar" onAction="#onBack" />
+    <TableView fx:id="tableViewPerguntas" prefWidth="940"
+               style="-fx-background-color: white; -fx-border-color: #cccccc; -fx-border-width: 1; -fx-border-radius: 5; -fx-font-size: 13px;">
+        <columns>
+            <TableColumn fx:id="colId" text="ID" prefWidth="60" style="-fx-alignment: CENTER; -fx-font-weight: bold;"/>
+            <TableColumn fx:id="colEnunciado" text="Enunciado" prefWidth="320" style="-fx-alignment: CENTER_LEFT; -fx-font-weight: bold;"/>
+            <TableColumn fx:id="colCodigo" text="Código" prefWidth="90" style="-fx-alignment: CENTER; -fx-font-weight: bold;"/>
+            <TableColumn fx:id="colInicio" text="Início" prefWidth="120" style="-fx-alignment: CENTER; -fx-font-weight: bold;"/>
+            <TableColumn fx:id="colFim" text="Fim" prefWidth="120" style="-fx-alignment: CENTER; -fx-font-weight: bold;"/>
+            <TableColumn fx:id="colRespostas" text="Resp." prefWidth="60" style="-fx-alignment: CENTER; -fx-font-weight: bold;"/>
+            <TableColumn fx:id="colPercentagemCertas" prefWidth="70" style="-fx-alignment: CENTER; -fx-font-weight: bold;">
+                <text>% Certas</text>
+            </TableColumn>
+            <TableColumn fx:id="colAcoes" text="Ações" prefWidth="100" style="-fx-alignment: CENTER; -fx-font-weight: bold;"/>
+        </columns>
+        <VBox.vgrow>ALWAYS</VBox.vgrow>
+    </TableView>
+
+    <Button text="Voltar" onAction="#onBack"
+            style="-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-size: 16px; -fx-font-weight: bold; -fx-pref-width: 150px; -fx-pref-height: 40px; -fx-background-radius: 8; -fx-cursor: hand;">
+        <VBox.margin>
+            <Insets top="10.0" />
+        </VBox.margin>
+    </Button>
 
 </VBox>
