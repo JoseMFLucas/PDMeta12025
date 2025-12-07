@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.layout.HBox?>
+
+<VBox alignment="CENTER" spacing="15.0"
+      style="-fx-background-color: #f4f4f9; -fx-font-family: 'Arial', sans-serif;"
+      xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="pt.isec.pd.tp.Client.ui.gui.vistas.ConsultarPerguntaPane">
+
+    <padding>
+        <Insets bottom="40.0" left="40.0" right="40.0" top="40.0" />
+    </padding>
+
+    <Label text="Consultar Pergunta"
+           style="-fx-font-size: 28px; -fx-font-weight: bold; -fx-text-fill: #333333; -fx-padding: 0 0 10 0;" />
+
+    <Label text="ID da Pergunta:"
+           style="-fx-font-size: 14px; -fx-text-fill: #333333;" />
+
+    <TextField fx:id="txtIdPergunta" promptText="Insira o ID da Pergunta"
+               style="-fx-font-size: 14px; -fx-pref-height: 40px; -fx-background-radius: 5; -fx-border-color: #cccccc; -fx-border-width: 1; -fx-border-radius: 5; -fx-padding: 0 10 0 10; -fx-pref-width: 250px;" />
+
+    <HBox spacing="15.0" alignment="CENTER" style="-fx-padding: 10 0 0 0;">
+
+        <Button text="Consultar" onAction="#onConsultar"
+                style="-fx-background-color: #007bff; -fx-text-fill: white; -fx-font-size: 16px; -fx-font-weight: bold; -fx-pref-width: 110px; -fx-pref-height: 40px; -fx-background-radius: 8; -fx-cursor: hand;" />
+
+        <Button text="Voltar" onAction="#onBack"
+                style="-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-size: 16px; -fx-font-weight: bold; -fx-pref-width: 110px; -fx-pref-height: 40px; -fx-background-radius: 8; -fx-cursor: hand;" />
+
+    </HBox>
+
+</VBox>
