@@ -37,13 +37,18 @@ public class ServidorLogica {
 
         if (msg.getTipo() == Mensagem.Tipo.LOGIN) {
             Client clientToAuthenticate = (Client) msg.getPayload();
+            System.out.println(clientToAuthenticate);
             String tipoUser = dbManager.login(clientToAuthenticate);
+            System.out.println(tipoUser);
 
             if (tipoUser != null) {
                 int idUser = dbManager.getUserId(clientToAuthenticate.getEmail(), tipoUser);
+                String UserName = dbManager.getUserName(clientToAuthenticate.getEmail(), tipoUser);
 
                 clientToAuthenticate.setTipo(Client.Tipo.valueOf(tipoUser));
                 clientToAuthenticate.setId(idUser);
+                clientToAuthenticate.setNome(UserName);
+
 
                 System.out.println("Login bem-sucedido. ID: " + clientToAuthenticate.getId() + " Tipo: " + clientToAuthenticate.getTipo());
 
@@ -109,43 +114,49 @@ public class ServidorLogica {
             case EDITAR_PERGUNTA:
                 if(dbManager.editarPergunta((String[]) msg.getPayload())) {
                     notificarClientes(new Mensagem(Mensagem.Tipo.NOTIFICACAO_ASSINCRONA, "Uma pergunta foi editada."), handler);
-                    return new Mensagem(Mensagem.Tipo.OPERACAO_SUCESSO, null);
+                    return new Mensagem(Mensagem.Tipo.OPERACAO_SUCESSO, "Pergunta editada com sucesso.");
                 }else{
-                    return new Mensagem(Mensagem.Tipo.OPERACAO_FALHOU, null);
+                    return new Mensagem(Mensagem.Tipo.OPERACAO_FALHOU, "A pergunta tem respostas associadas.");
                 }
             case ELIMINAR_PERGUNTA:
                 if(dbManager.eliminarPergunta((int)msg.getPayload())){
                     notificarClientes(new Mensagem(Mensagem.Tipo.NOTIFICACAO_ASSINCRONA, "Uma pergunta foi eliminada."), handler);
-                    return new Mensagem(Mensagem.Tipo.OPERACAO_SUCESSO, null);
+                    return new Mensagem(Mensagem.Tipo.OPERACAO_SUCESSO, "Pergunta eliminada com sucesso.");
                 }else{
-                    return new Mensagem(Mensagem.Tipo.OPERACAO_FALHOU, null);
+                    return new Mensagem(Mensagem.Tipo.OPERACAO_FALHOU, "A pergunta tem respostas associadas.");
                 }
             case EDITAR_PERFIL_DOCENTE:
                 if (dbManager.editarPerfilDocente((String[]) msg.getPayload())) {
-                    return new Mensagem(Mensagem.Tipo.OPERACAO_SUCESSO, null);
+                    notificarClientes(new Mensagem(Mensagem.Tipo.NOTIFICACAO_ASSINCRONA, "Um perfil de Cliente editado."), handler);
+                    return new Mensagem(Mensagem.Tipo.OPERACAO_SUCESSO, "Perfil do docente editado com sucesso.");
                 }else{
-                    return new Mensagem(Mensagem.Tipo.OPERACAO_FALHOU, null);
+                    return new Mensagem(Mensagem.Tipo.OPERACAO_FALHOU, "Perfil do docente não editado.");
                 }
             case OBTER_PERGUNTA:
                 String[] perguntaAtiva = dbManager.obterPerguntaPorCodigo((String) msg.getPayload());
                 if (perguntaAtiva != null) {
                     return new Mensagem(Mensagem.Tipo.DETALHES_PERGUNTA_ESTUDANTE, perguntaAtiva);
+                }else{
+                    return new Mensagem(Mensagem.Tipo.OPERACAO_FALHOU, "Pergunta não está ativa ou não existe");
                 }
-                break;
             case SUBMETER_RESPOSTA:
                 String[] dadosResposta = (String[]) msg.getPayload();
                 int idEstudante = Integer.parseInt(dadosResposta[0]);
                 int idPergunta = Integer.parseInt(dadosResposta[1]);
                 int opcaoEscolhida = Integer.parseInt(dadosResposta[2]);
                 if (dbManager.submeterResposta(idEstudante, idPergunta, opcaoEscolhida)) {
-                    return new Mensagem(Mensagem.Tipo.OPERACAO_SUCESSO, null);
+                    notificarClientes(new Mensagem(Mensagem.Tipo.NOTIFICACAO_ASSINCRONA, "Uma resposta foi submetida."), handler);
+                    return new Mensagem(Mensagem.Tipo.OPERACAO_SUCESSO, "Resposta submetida com sucesso.");
+                }else{
+                    return new Mensagem(Mensagem.Tipo.OPERACAO_FALHOU, "Resposta não foi submetida.");
                 }
-                break;
             case EDITAR_PERFIL_ESTUDANTE:
                 if (dbManager.editarPerfilEstudante((String[]) msg.getPayload())) {
-                    return new Mensagem(Mensagem.Tipo.OPERACAO_SUCESSO, null);
+                    notificarClientes(new Mensagem(Mensagem.Tipo.NOTIFICACAO_ASSINCRONA, "Um perfil de Cliente editado."), handler);
+                    return new Mensagem(Mensagem.Tipo.OPERACAO_SUCESSO, "Perfil do estudante editado com sucesso.");
+                }else{
+                    return new Mensagem(Mensagem.Tipo.OPERACAO_FALHOU, "Perfil do estudante não editado.");
                 }
-                break;
             // Leitura DB
             case LISTAR_PERGUNTAS_DOCENTE:
                 String[] payload = (String[]) msg.getPayload();
@@ -205,9 +216,7 @@ public class ServidorLogica {
     }
 
     public void notificarAlteracaoDB(String sql) {
-        System.out.println("isPrincipal: " + isServidorPrincipal() + "\n multicastSpeaker: " + (multicastSpeaker != null));
         if (isServidorPrincipal() && multicastSpeaker != null) {
-            System.out.println("fds");
             multicastSpeaker.sendDatabaseUpdate(dbManager.getVersaoDB(), sql);
         }
     }
