@@ -13,9 +13,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public class ClientMain {
+import static pt.isec.pd.tp.Utils.Configs.Pasta_CSV;
 
-    private static final String Pasta_CSV = "../../../../../../csv";
+public class ClientMain {
 
     private ClientListener listener;
     private Thread listenerThread;
