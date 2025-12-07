@@ -26,7 +26,15 @@ public class DocenteHomePage implements InitializableController {
     }
 
     @FXML
+    private void onLogout() {
+        clientManager.logout();
+    }
+
+    @FXML
+    private void onConsultarPergunta(){clientManager.setState(ClientState.CONSULTAR_PERGUNTA);}
+
+    @FXML
     private void onEditarPerfilDocente(){
-        //TODO
+        clientManager.setState(ClientState.EDITAR_PERFIL_DOCENTE);
     }
 }
