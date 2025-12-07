@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.layout.HBox?>
+
+<VBox alignment="TOP_CENTER" spacing="15.0"
+      style="-fx-background-color: #f4f4f9; -fx-font-family: 'Arial', sans-serif;"
+      xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="pt.isec.pd.tp.Client.ui.gui.vistas.EditarPerguntaPane">
+
+    <padding>
+        <Insets bottom="40.0" left="40.0" right="40.0" top="40.0" />
+    </padding>
+
+    <Label text="Editar Pergunta"
+           style="-fx-font-size: 28px; -fx-font-weight: bold; -fx-text-fill: #333333; -fx-padding: 0 0 10 0;" />
+
+    <Label text="Enunciado da Pergunta:"
+           style="-fx-font-size: 14px; -fx-text-fill: #333333; -fx-font-weight: bold;" />
+    <TextArea fx:id="taEnunciado" promptText="Qual a cor do cavalo branco de Napoleão?" wrapText="true"
+              style="-fx-font-size: 14px; -fx-pref-height: 80px; -fx-background-radius: 5; -fx-border-color: #cccccc; -fx-border-width: 1; -fx-border-radius: 5; -fx-padding: 5;" />
+
+    <Label text="Opções de Resposta:"
+           style="-fx-font-size: 14px; -fx-text-fill: #333333; -fx-font-weight: bold;" />
+    <VBox fx:id="optionsContainer" spacing="5.0" style="-fx-pref-width: 350px;" />
+
+    <HBox spacing="10.0" alignment="CENTER" style="-fx-padding: 5 0 10 0;">
+        <Button text="Adicionar Opção" onAction="#onAddOption"
+                style="-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-size: 14px; -fx-background-radius: 5; -fx-cursor: hand;" />
+        <Button text="Remover Última Opção" onAction="#onRemoveOption"
+                style="-fx-background-color: #ffc107; -fx-text-fill: #333333; -fx-font-size: 14px; -fx-background-radius: 5; -fx-cursor: hand;" />
+    </HBox>
+
+    <Label text="Índice da Opção Correta (começa em 0):"
+           style="-fx-font-size: 14px; -fx-text-fill: #333333; -fx-font-weight: bold;" />
+    <Spinner fx:id="spinnerOpcaoCorreta" min="0" max="0" initialValue="0"
+             style="-fx-pref-width: 100px; -fx-font-size: 14px;" />
+
+    <Label text="Datas de Início e Fim (YYYY/MM/DD HH:MM):"
+           style="-fx-font-size: 14px; -fx-text-fill: #333333; -fx-font-weight: bold;" />
+
+    <VBox spacing="10.0" alignment="CENTER">
+        <HBox spacing="10.0" alignment="CENTER">
+            <Label text="Início:" style="-fx-font-size: 14px;" />
+            <TextField fx:id="txtDataInicio" promptText="YYYY/MM/DD HH:MM" style="-fx-pref-width: 180px; -fx-font-size: 14px; -fx-background-radius: 5; -fx-border-color: #cccccc; -fx-border-width: 1; -fx-border-radius: 5;" />
+        </HBox>
+        <HBox spacing="10.0" alignment="CENTER">
+            <Label text="Fim:  " style="-fx-font-size: 14px;" />
+            <TextField fx:id="txtDataFim" promptText="YYYY/MM/DD HH:MM" style="-fx-pref-width: 180px; -fx-font-size: 14px; -fx-background-radius: 5; -fx-border-color: #cccccc; -fx-border-width: 1; -fx-border-radius: 5;" />
+        </HBox>
+    </VBox>
+
+
+    <HBox spacing="15.0" alignment="CENTER" style="-fx-padding: 20 0 0 0;">
+
+        <Button text="Guardar Alterações" onAction="#onEdit"
+                style="-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-size: 16px; -fx-font-weight: bold; -fx-pref-width: 180px; -fx-pref-height: 40px; -fx-background-radius: 8; -fx-cursor: hand;" />
+
+        <Button text="Voltar" onAction="#onBack"
+                style="-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-size: 16px; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 40px; -fx-background-radius: 8; -fx-cursor: hand;" />
+
+    </HBox>
+
+</VBox>
