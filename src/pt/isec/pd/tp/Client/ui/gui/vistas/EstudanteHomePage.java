@@ -19,7 +19,7 @@ public class EstudanteHomePage implements InitializableController {
 
     @FXML
     private void onEditarPerfilEstudante(){
-        //TODO
+        clientManager.setState(ClientState.EDITAR_PERFIL_ESTUDANTE);
     }
 
     @FXML
@@ -28,8 +28,12 @@ public class EstudanteHomePage implements InitializableController {
     }
 
     @FXML
+    private void onLogout() {
+        clientManager.logout();
+    }
+
+    @FXML
     private void onListarPerguntasRespondidas() {
-        // TODO: Implementar estado para listar perguntas respondidas
-        System.out.println("Listar perguntas respondidas (TODO)");
+        clientManager.getRespostas();
     }
 }
