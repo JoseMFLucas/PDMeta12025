@@ -48,7 +48,6 @@ public class MainPane extends StackPane {
     }
 
     private Node loadFXML(String fxmlPath) {
-        System.out.println("Loading FXML: " + fxmlPath);
         try {
             FXMLLoader fxmlLoader = new FXMLLoader(getClass().getResource(fxmlPath));
             Pane view = fxmlLoader.load();
@@ -60,7 +59,6 @@ public class MainPane extends StackPane {
             if (controller instanceof RootAwareController) {
                 ((RootAwareController) controller).setRootNode(view);
             }
-            System.out.println("Successfully loaded FXML: " + fxmlPath);
             return view;
         } catch (IOException e) {
             System.err.println("Failed to load FXML file: " + fxmlPath);
