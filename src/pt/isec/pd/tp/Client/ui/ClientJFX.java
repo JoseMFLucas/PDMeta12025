@@ -32,7 +32,7 @@ public class ClientJFX extends Application {
 
 
         MainPane root = new MainPane(manager);
-        Scene scene = new Scene(root, 800, 600);
+        Scene scene = new Scene(root, 1000, 800);
 
         stage.setTitle("Cliente PD - JavaFX");
         stage.setScene(scene);
