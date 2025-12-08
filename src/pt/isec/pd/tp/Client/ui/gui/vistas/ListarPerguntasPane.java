@@ -56,10 +56,13 @@ public class ListarPerguntasPane implements InitializableController {
         choiceBoxFiltro.setItems(FXCollections.observableArrayList("Todas", "Ativas", "Futuras", "Expiradas"));
         choiceBoxFiltro.setValue("Todas");
         choiceBoxFiltro.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal == null || newVal.equals(oldVal)) {
+                return;
+            }
             if ("Expiradas".equals(newVal)) {
                 clientManager.getEstatisticasPerguntas();
             } else {
-                updateTableView();
+                clientManager.getPerguntas();
             }
         });
     }
@@ -104,8 +107,8 @@ public class ListarPerguntasPane implements InitializableController {
                 Platform.runLater(this::updateTableView);
             } else if (evt.getPropertyName().equals(ClientManager.PROP_STATE) && clientManager.getState() == ClientState.LISTAR_PERGUNTAS) {
                 Platform.runLater(() -> {
+                    clientManager.getPerguntas();
                     choiceBoxFiltro.setValue("Todas");
-                    updateTableView();
                 });
             }
         });
