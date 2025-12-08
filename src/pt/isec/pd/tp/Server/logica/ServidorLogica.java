@@ -109,8 +109,9 @@ public class ServidorLogica {
 
                 if(dadospergunta != null){
                     return new Mensagem(Mensagem.Tipo.DETALHES_PERGUNTA, dadospergunta);
+                }else{
+                    return new Mensagem(Mensagem.Tipo.OPERACAO_FALHOU, "Pergunta não está ativa ou não existe");
                 }
-                break;
             case EDITAR_PERGUNTA:
                 if(dbManager.editarPergunta((String[]) msg.getPayload())) {
                     notificarClientes(new Mensagem(Mensagem.Tipo.NOTIFICACAO_ASSINCRONA, "Uma pergunta foi editada."), handler);

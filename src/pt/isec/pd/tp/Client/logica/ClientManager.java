@@ -108,6 +108,8 @@ public class ClientManager {
                 this.user = (Client) msg.getPayload();
                 setState(user.getTipo() == Client.Tipo.DOCENTE ? ClientState.DOCENTE_HOME : ClientState.ESTUDANTE_HOME);
                 break;
+            case LOGIN_FALHOU:
+                pcs.firePropertyChange(PROP_CLOSE_APP, false, true);
             case REGISTO_SUCESSO:
                 login(user.getEmail(), user.getPassword());
                 break;
@@ -207,7 +209,9 @@ public class ClientManager {
                 pcs.firePropertyChange(PROP_MSG_SUCESSO, null, "Operação realizada com sucesso!");
                 setState(user.getTipo() == Client.Tipo.DOCENTE ? ClientState.DOCENTE_HOME : ClientState.ESTUDANTE_HOME);
                 break;
-            case ERRO:
+            case NOTIFICACAO_ASSINCRONA:
+                pcs.firePropertyChange(PROP_MSG_SUCESSO, null, msg.getPayload());
+                break;
             case OPERACAO_FALHOU:
                 pcs.firePropertyChange(PROP_MSG_ERRO, null, "Erro: " + msg.getPayload());
                 break;
