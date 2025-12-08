@@ -191,7 +191,6 @@ public class ClientManager {
                 String opcoesEstudanteString = perguntaEstudante[2].replaceAll("[\\[\\]]", "").trim();
                 String[] opcoesEstudante = opcoesEstudanteString.isEmpty() ? new String[0] : opcoesEstudanteString.split(",\\s*");
 
-                // The student does not receive the correct answer, so we pass -1
                 Pergunta perguntaEstudanteObj = new Pergunta(perguntaEstudante[1], opcoesEstudante, -1);
                 perguntaEstudanteObj.setId(Integer.parseInt(perguntaEstudante[0]));
 
